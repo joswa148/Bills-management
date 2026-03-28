@@ -1,24 +1,30 @@
 import { pool } from '../app.js';
 import { differenceInDays } from 'date-fns';
 import crypto from 'crypto';
+import { sendExpiryAlert } from './emailService.js';
 
 export const checkAndCreateNotifications = async () => {
   const today = new Date();
   const startOfToday = new Date(today.setHours(0, 0, 0, 0));
   
-  // Find all active subscriptions
-  const [subscriptions] = await pool.execute('SELECT * FROM subscriptions WHERE status = "active"');
+  // Find all active subscriptions and their user details
+  const [subscriptions] = await pool.execute(
+    `SELECT s.*, u.email, u.name as user_name 
+     FROM subscriptions s 
+     JOIN users u ON s.user_id = u.id 
+     WHERE s.status = "active"`
+  );
 
   const notifications = [];
 
   for (const sub of subscriptions) {
     const daysLeft = differenceInDays(new Date(sub.validity_date), new Date());
     
-    // Create notification if due in 7 days
-    if (daysLeft >= 0 && daysLeft <= 7) {
+    // Create notification if due in 7, 3, or 1 days
+    if (daysLeft >= 0 && (daysLeft === 7 || daysLeft === 3 || daysLeft === 1)) {
       const [existing] = await pool.execute(
-        'SELECT * FROM notifications WHERE subscription_id = ? AND sent_at >= ?',
-        [sub.id, startOfToday]
+        'SELECT * FROM notifications WHERE subscription_id = ? AND type = ? AND DATE(sent_at) = CURDATE()',
+        [sub.id, daysLeft <= 2 ? 'overdue' : 'upcoming_bill']
       );
 
       if (existing.length === 0) {
@@ -26,12 +32,21 @@ export const checkAndCreateNotifications = async () => {
         const type = daysLeft <= 2 ? 'overdue' : 'upcoming_bill';
         const message = `${sub.service_name} is due for renewal in ${daysLeft} days.`;
 
+        // Send email alert
+        let emailSent = false;
+        try {
+          await sendExpiryAlert(sub.email, sub.user_name, sub.service_name, daysLeft);
+          emailSent = true;
+        } catch (error) {
+          console.error(`Failed to send email to ${sub.email}:`, error);
+        }
+
         await pool.execute(
-          'INSERT INTO notifications (id, user_id, subscription_id, type, message) VALUES (?, ?, ?, ?, ?)',
-          [id, sub.user_id, sub.id, type, message]
+          'INSERT INTO notifications (id, user_id, subscription_id, type, message, email_sent) VALUES (?, ?, ?, ?, ?, ?)',
+          [id, sub.user_id, sub.id, type, message, emailSent]
         );
 
-        notifications.push({ id, userId: sub.user_id, subscriptionId: sub.id, type, message });
+        notifications.push({ id, userId: sub.user_id, subscriptionId: sub.id, type, message, emailSent });
       }
     }
   }

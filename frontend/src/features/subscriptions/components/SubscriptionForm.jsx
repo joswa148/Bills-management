@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import dayjs from 'dayjs';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
+import BillScanner from './BillScanner';
 
 const schema = z.object({
   name: z.string().min(2, 'Service name is required'),
@@ -30,6 +31,18 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       status: 'Active',
     }
   });
+
+  const handleScanSuccess = (data) => {
+    reset({
+      ...data,
+      validityDate: dayjs(data.validityDate),
+      name: data.serviceName, // Backend returns serviceName, frontend uses name
+      bank: data.bankName,    // Backend returns bankName, frontend uses bank
+      status: data.status ? (data.status.charAt(0).toUpperCase() + data.status.slice(1)) : 'Active',
+      period: data.period ? (data.period.charAt(0).toUpperCase() + data.period.slice(1)) : 'Monthly',
+      region: data.region || 'India'
+    });
+  };
 
   useEffect(() => {
     if (initialValues) {
@@ -74,6 +87,8 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       className="premium-modal"
       centered
     >
+      {!initialValues && <BillScanner onScanSuccess={handleScanSuccess} />}
+      
       <Form layout="vertical" onFinish={handleSubmit(onSubmit)} className="mt-6">
         <div className="grid grid-cols-2 gap-x-6">
           <Form.Item label="Service Name" validateStatus={errors.name ? 'error' : ''} help={errors.name?.message}>

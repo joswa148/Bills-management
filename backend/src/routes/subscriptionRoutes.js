@@ -1,11 +1,14 @@
 import express from 'express';
 import * as subscriptionController from '../controllers/subscriptionController.js';
+import * as scanController from '../controllers/scanController.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Apply protection to all routes
 router.use(protect);
+
+router.post('/scan', scanController.scanBill);
 
 router.get('/', subscriptionController.listSubscriptions);
 router.get('/:id', subscriptionController.getSubscription);
