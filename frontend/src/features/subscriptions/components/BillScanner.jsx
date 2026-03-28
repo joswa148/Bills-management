@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Upload, message, Progress, Space } from 'antd';
-import { InboxOutlined, LoadingOutlined, CheckCircleFilled, scanOutlined } from '@ant-design/icons';
+import { Upload, message, Progress, Button } from 'antd';
+import { InboxOutlined, LoadingOutlined, CheckCircleFilled } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Dragger } = Upload;
