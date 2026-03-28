@@ -1,42 +1,37 @@
-import { prisma } from '../app.js';
+import { pool } from '../app.js';
 import { differenceInDays } from 'date-fns';
+import crypto from 'crypto';
 
 export const checkAndCreateNotifications = async () => {
   const today = new Date();
+  const startOfToday = new Date(today.setHours(0, 0, 0, 0));
   
   // Find all active subscriptions
-  const subscriptions = await prisma.subscription.findMany({
-    where: { status: 'active' },
-  });
+  const [subscriptions] = await pool.execute('SELECT * FROM subscriptions WHERE status = "active"');
 
   const notifications = [];
 
   for (const sub of subscriptions) {
-    const daysLeft = differenceInDays(new Date(sub.validityDate), today);
+    const daysLeft = differenceInDays(new Date(sub.validity_date), new Date());
     
     // Create notification if due in 7 days
     if (daysLeft >= 0 && daysLeft <= 7) {
-      // Check if notification already exists for this sub and this date (simple check)
-      const existing = await prisma.notification.findFirst({
-        where: {
-          subscriptionId: sub.id,
-          sentAt: {
-            gte: new Date(today.setHours(0, 0, 0, 0)),
-          },
-        },
-      });
+      const [existing] = await pool.execute(
+        'SELECT * FROM notifications WHERE subscription_id = ? AND sent_at >= ?',
+        [sub.id, startOfToday]
+      );
 
-      if (!existing) {
-        const notification = await prisma.notification.create({
-          data: {
-            userId: sub.userId,
-            subscriptionId: sub.id,
-            type: daysLeft <= 2 ? 'overdue' : 'upcoming_bill',
-            message: `${sub.serviceName} is due for renewal in ${daysLeft} days.`,
-          },
-        });
-        notifications.push(notification);
-        // Here you would also call an email service
+      if (existing.length === 0) {
+        const id = crypto.randomUUID();
+        const type = daysLeft <= 2 ? 'overdue' : 'upcoming_bill';
+        const message = `${sub.service_name} is due for renewal in ${daysLeft} days.`;
+
+        await pool.execute(
+          'INSERT INTO notifications (id, user_id, subscription_id, type, message) VALUES (?, ?, ?, ?, ?)',
+          [id, sub.user_id, sub.id, type, message]
+        );
+
+        notifications.push({ id, userId: sub.user_id, subscriptionId: sub.id, type, message });
       }
     }
   }
@@ -45,15 +40,26 @@ export const checkAndCreateNotifications = async () => {
 };
 
 export const getUserNotifications = async (userId) => {
-  return await prisma.notification.findMany({
-    where: { userId },
-    orderBy: { sentAt: 'desc' },
-  });
+  const [rows] = await pool.execute(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY sent_at DESC',
+    [userId]
+  );
+  return rows.map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    subscriptionId: row.subscription_id,
+    type: row.type,
+    message: row.message,
+    isRead: row.is_read,
+    sentAt: row.sent_at,
+    emailSent: row.email_sent
+  }));
 };
 
 export const markAsRead = async (id, userId) => {
-  return await prisma.notification.updateMany({
-    where: { id, userId },
-    data: { isRead: true },
-  });
+  await pool.execute(
+    'UPDATE notifications SET is_read = true WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
+  return true;
 };

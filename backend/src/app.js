@@ -2,8 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import mysql from 'mysql2/promise';
 import authRoutes from './routes/authRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
@@ -12,7 +11,13 @@ import notificationRoutes from './routes/notificationRoutes.js';
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
+
+const pool = mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 // Middleware
 app.use(helmet());
@@ -35,4 +40,4 @@ app.use((err, req, res, _next) => {
   });
 });
 
-export { app, prisma };
+export { app, pool };
