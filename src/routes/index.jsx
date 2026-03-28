@@ -1,8 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
 import App from "../App";
 import Dashboard from "../features/analytics/pages/Dashboard";
-import BillsList from "../features/bills/pages/BillsList";
-import Reports from "../features/analytics/pages/Reports";
+import SubscriptionsList from "../features/subscriptions/pages/SubscriptionsList";
+import Analytics from "../features/analytics/pages/Analytics";
+import Settings from "../features/settings/pages/Settings";
 
 export const router = createBrowserRouter([
   {
@@ -14,16 +15,16 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
-        path: "bills",
-        element: <BillsList />,
+        path: "subscriptions",
+        element: <SubscriptionsList />,
       },
       {
-        path: "invoices",
-        element: <div>Invoices Page Placeholder</div>,
+        path: "analytics",
+        element: <Analytics />,
       },
       {
-        path: "reports",
-        element: <Reports />,
+        path: "settings",
+        element: <Settings />,
       },
     ],
   },
