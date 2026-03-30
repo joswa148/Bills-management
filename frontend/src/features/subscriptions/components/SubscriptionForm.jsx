@@ -12,13 +12,22 @@ const schema = z.object({
   serviceName: z.string().min(2, 'Service name is required'),
   category: z.string().min(2, 'Category is required'),
   period: z.enum(['monthly', 'yearly', 'quarterly']),
-  priceINR: z.number().positive('Price must be positive'),
-  priceAED: z.number().positive('Price must be positive'),
+  priceINR: z.number().min(0, 'Price must be 0 or positive'),
+  priceAED: z.number().min(0, 'Price must be 0 or positive'),
   validityDate: z.any().refine((val) => val !== null, 'Validity date is required'),
   paymentMethod: z.string().min(2, 'Payment method is required'),
   bankName: z.string().min(2, 'Bank is required'),
   region: z.enum(['India', 'UAE']),
   status: z.enum(['active', 'cancelled', 'paused']),
+  invoiceId: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  poNumber: z.string().optional().nullable(),
+  issueDate: z.any().optional().nullable(),
+  dueDate: z.any().optional().nullable(),
+  subtotal: z.number().optional().nullable(),
+  discount: z.number().optional().nullable(),
+  amountDue: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 export default function SubscriptionForm({ open, onCancel, initialValues }) {
@@ -36,7 +45,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const handleScanSuccess = (data) => {
     reset({
       ...data,
-      validityDate: dayjs(data.validityDate),
+      validityDate: data.validityDate ? dayjs(data.validityDate) : null,
+      issueDate: data.issueDate ? dayjs(data.issueDate) : null,
+      dueDate: data.dueDate ? dayjs(data.dueDate) : null,
       status: data.status || 'active',
       period: data.period || 'monthly',
       region: data.region || 'India'
@@ -47,13 +58,26 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     if (initialValues) {
       reset({
         ...initialValues,
-        validityDate: dayjs(initialValues.validityDate),
+        validityDate: initialValues.validityDate ? dayjs(initialValues.validityDate) : null,
+        issueDate: initialValues.issueDate ? dayjs(initialValues.issueDate) : null,
+        dueDate: initialValues.dueDate ? dayjs(initialValues.dueDate) : null,
       });
     } else {
       reset({
         period: 'monthly',
         region: 'India',
         status: 'active',
+        serviceName: '',
+        category: 'General',
+        priceINR: 0,
+        priceAED: 0,
+        invoiceId: '',
+        poNumber: '',
+        subject: '',
+        notes: '',
+        subtotal: 0,
+        discount: 0,
+        amountDue: 0
       });
     }
   }, [initialValues, reset, open]);
@@ -61,7 +85,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const onSubmit = async (data) => {
     const formattedData = {
       ...data,
-      validityDate: data.validityDate.format('YYYY-MM-DD'),
+      validityDate: data.validityDate ? data.validityDate.format('YYYY-MM-DD') : null,
+      issueDate: data.issueDate && data.issueDate.isValid ? data.issueDate.format('YYYY-MM-DD') : null,
+      dueDate: data.dueDate && data.dueDate.isValid ? data.dueDate.format('YYYY-MM-DD') : null,
     };
 
     try {
@@ -93,6 +119,11 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       
       <Form layout="vertical" onFinish={handleSubmit(onSubmit)} className="mt-6">
         <div className="grid grid-cols-2 gap-x-6">
+          <div className="col-span-2 mt-4 mb-2 pb-2 border-b border-secondary-100 flex items-center">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mr-2"></span>
+            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Service Details</span>
+          </div>
+
           <Form.Item label="Service Name" validateStatus={errors.serviceName ? 'error' : ''} help={errors.serviceName?.message}>
             <Controller
               name="serviceName"
@@ -128,6 +159,72 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
               name="validityDate"
               control={control}
               render={({ field }) => <DatePicker {...field} className="w-full rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <div className="col-span-2 mt-6 mb-2 pb-2 border-b border-secondary-100 flex items-center">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Invoice Details</span>
+          </div>
+
+          <Form.Item label="Invoice ID" validateStatus={errors.invoiceId ? 'error' : ''} help={errors.invoiceId?.message}>
+            <Controller
+              name="invoiceId"
+              control={control}
+              render={({ field }) => <Input {...field} placeholder="e.g. INV-001" className="rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <Form.Item label="PO Number" validateStatus={errors.poNumber ? 'error' : ''} help={errors.poNumber?.message}>
+            <Controller
+              name="poNumber"
+              control={control}
+              render={({ field }) => <Input {...field} placeholder="PO-5678" className="rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <Form.Item label="Issue Date" validateStatus={errors.issueDate ? 'error' : ''} help={errors.issueDate?.message}>
+            <Controller
+              name="issueDate"
+              control={control}
+              render={({ field }) => <DatePicker {...field} className="w-full rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <Form.Item label="Due Date" validateStatus={errors.dueDate ? 'error' : ''} help={errors.dueDate?.message}>
+            <Controller
+              name="dueDate"
+              control={control}
+              render={({ field }) => <DatePicker {...field} className="w-full rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <Form.Item label="Subject" className="col-span-2" validateStatus={errors.subject ? 'error' : ''} help={errors.subject?.message}>
+            <Controller
+              name="subject"
+              control={control}
+              render={({ field }) => <Input {...field} placeholder="Invoice for Monthly Subscription" className="rounded-xl py-2.5" />}
+            />
+          </Form.Item>
+
+          <div className="col-span-2 mt-6 mb-2 pb-2 border-b border-secondary-100 flex items-center">
+            <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Financials & Payment</span>
+          </div>
+
+          <Form.Item label="Subtotal" validateStatus={errors.subtotal ? 'error' : ''} help={errors.subtotal?.message}>
+            <Controller
+              name="subtotal"
+              control={control}
+              render={({ field }) => <InputNumber {...field} className="w-full rounded-xl py-2" placeholder="0" />}
+            />
+          </Form.Item>
+
+          <Form.Item label="Discount" validateStatus={errors.discount ? 'error' : ''} help={errors.discount?.message}>
+            <Controller
+              name="discount"
+              control={control}
+              render={({ field }) => <InputNumber {...field} className="w-full rounded-xl py-2" placeholder="0" />}
             />
           </Form.Item>
 
@@ -187,6 +284,14 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                   <Select.Option value="paused">Paused</Select.Option>
                 </Select>
               )}
+            />
+          </Form.Item>
+
+          <Form.Item label="Notes" className="col-span-2" validateStatus={errors.notes ? 'error' : ''} help={errors.notes?.message}>
+            <Controller
+              name="notes"
+              control={control}
+              render={({ field }) => <Input.TextArea {...field} rows={3} placeholder="Add any additional notes here..." className="rounded-xl" />}
             />
           </Form.Item>
         </div>

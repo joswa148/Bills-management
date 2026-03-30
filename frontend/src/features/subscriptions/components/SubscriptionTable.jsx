@@ -24,7 +24,19 @@ export default function SubscriptionTable({ onEdit }) {
           </Avatar>
           <div>
             <div className="font-bold text-secondary-900">{text}</div>
-            <div className="text-[10px] text-secondary-500 uppercase font-medium">{record.category}</div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-secondary-500 uppercase font-medium">{record.category}</span>
+              {record.invoiceId && (
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded inline-block w-fit">
+                  {record.invoiceId}
+                </span>
+              )}
+              {record.poNumber && (
+                <span className="text-[9px] text-blue-600 font-medium">
+                  PO: {record.poNumber}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       ),

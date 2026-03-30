@@ -29,12 +29,20 @@ export const getAllSubscriptions = async (userId, filters = {}) => {
     id: row.id,
     userId: row.user_id,
     serviceName: row.service_name,
+    invoiceId: row.invoice_id,
+    subject: row.subject,
     category: row.category,
     period: row.period,
     priceINR: row.price_inr,
     priceAED: row.price_aed,
+    subtotal: row.subtotal,
+    discount: row.discount,
+    amountDue: row.amount_due,
     totalYearly: row.total_yearly,
     validityDate: row.validity_date,
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    poNumber: row.po_number,
     paymentMethod: row.payment_method,
     cardLast4: row.card_last4,
     bankName: row.bank_name,
@@ -61,12 +69,20 @@ export const getSubscriptionById = async (id, userId) => {
     id: row.id,
     userId: row.user_id,
     serviceName: row.service_name,
+    invoiceId: row.invoice_id,
+    subject: row.subject,
     category: row.category,
     period: row.period,
     priceINR: row.price_inr,
     priceAED: row.price_aed,
+    subtotal: row.subtotal,
+    discount: row.discount,
+    amountDue: row.amount_due,
     totalYearly: row.total_yearly,
     validityDate: row.validity_date,
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    poNumber: row.po_number,
     paymentMethod: row.payment_method,
     cardLast4: row.card_last4,
     bankName: row.bank_name,
@@ -91,13 +107,17 @@ export const createSubscription = async (userId, data) => {
 
   await pool.execute(
     `INSERT INTO subscriptions (
-      id, user_id, service_name, category, period, price_inr, price_aed, 
-      total_yearly, validity_date, payment_method, card_last4, bank_name, 
-      region, status, notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, user_id, service_name, invoice_id, subject, category, period, 
+      price_inr, price_aed, subtotal, discount, amount_due, total_yearly, 
+      validity_date, issue_date, due_date, po_number, payment_method, 
+      card_last4, bank_name, region, status, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id, userId, data.serviceName, data.category || 'General', data.period,
-      data.priceINR, data.priceAED, totalYearly, validityDate,
+      id, userId, data.serviceName, data.invoiceId, data.subject, 
+      data.category || 'General', data.period,
+      data.priceINR, data.priceAED, data.subtotal, data.discount, data.amountDue, 
+      totalYearly, validityDate, data.issueDate ? new Date(data.issueDate) : null, 
+      data.dueDate ? new Date(data.dueDate) : null, data.poNumber,
       data.paymentMethod, data.cardLast4, data.bankName, data.region,
       data.status || 'active', data.notes
     ]
@@ -129,12 +149,20 @@ export const updateSubscription = async (id, userId, data) => {
   // Map camelCase to snake_case and build query
   const mappings = {
     serviceName: 'service_name',
+    invoiceId: 'invoice_id',
+    subject: 'subject',
     category: 'category',
     period: 'period',
     priceINR: 'price_inr',
     priceAED: 'price_aed',
+    subtotal: 'subtotal',
+    discount: 'discount',
+    amountDue: 'amount_due',
     totalYearly: 'total_yearly',
     validityDate: 'validity_date',
+    issueDate: 'issue_date',
+    dueDate: 'due_date',
+    poNumber: 'po_number',
     paymentMethod: 'payment_method',
     cardLast4: 'card_last4',
     bankName: 'bank_name',
@@ -146,7 +174,11 @@ export const updateSubscription = async (id, userId, data) => {
   for (const [key, val] of Object.entries(updateData)) {
     if (mappings[key]) {
       fields.push(`${mappings[key]} = ?`);
-      params.push(key === 'validityDate' ? new Date(val) : val);
+      if (['validityDate', 'issueDate', 'dueDate'].includes(key) && val) {
+        params.push(new Date(val));
+      } else {
+        params.push(val);
+      }
     }
   }
 

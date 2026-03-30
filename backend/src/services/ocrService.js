@@ -14,11 +14,19 @@ export const extractSubscriptionData = async (filePath) => {
   // Default mock data
   let extractedData = {
     serviceName: 'Detected Service',
+    invoiceId: null,
+    subject: null,
     category: 'General',
     period: 'monthly',
     priceINR: 0,
     priceAED: 0,
+    subtotal: 0,
+    discount: 0,
+    amountDue: 0,
     validityDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    issueDate: new Date().toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    poNumber: null,
     paymentMethod: 'Credit Card',
     bankName: 'Unknown Bank',
     region: 'India',
@@ -28,7 +36,23 @@ export const extractSubscriptionData = async (filePath) => {
   };
 
   // Logic to return more realistic mocks based on filename keywords
-  if (fileName.includes('netflix')) {
+  if (fileName.includes('harvest') || fileName.includes('invoice') || fileName.includes('bill') || fileName.includes('receipt') || fileName.includes('statement')) {
+    extractedData = {
+      ...extractedData,
+      serviceName: fileName.includes('harvest') ? 'Harvest Invoice' : 'Generic Invoice',
+      invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
+      subject: fileName.includes('harvest') ? 'Monthly Service Maintenance' : 'Service Bill',
+      category: 'Software',
+      subtotal: 1250,
+      discount: 250,
+      amountDue: 1000,
+      priceINR: 1000,
+      priceAED: 44,
+      poNumber: 'PO-' + Math.floor(Math.random() * 9000),
+      bankName: 'HDFC Bank',
+      paymentMethod: 'Bank Transfer'
+    };
+  } else if (fileName.includes('netflix')) {
     extractedData = {
       ...extractedData,
       serviceName: 'Netflix',

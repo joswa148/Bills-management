@@ -3,14 +3,23 @@ import { z } from 'zod';
 
 const subscriptionSchema = z.object({
   serviceName: z.string().min(1),
+  invoiceId: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  category: z.string().optional(),
   period: z.enum(['monthly', 'quarterly', 'yearly']),
-  priceINR: z.number().positive(),
-  priceAED: z.number().positive(),
+  priceINR: z.number(),
+  priceAED: z.number(),
+  subtotal: z.number().optional().nullable(),
+  discount: z.number().optional().nullable(),
+  amountDue: z.number().optional().nullable(),
   validityDate: z.string(),
+  issueDate: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  poNumber: z.string().optional().nullable(),
   paymentMethod: z.string(),
   bankName: z.string(),
   region: z.enum(['India', 'UAE']),
-  status: z.enum(['active', 'cancelled', 'paused']).optional(),
+  status: z.enum(['active', 'cancelled', 'paused']),
   notes: z.string().optional(),
 });
 
