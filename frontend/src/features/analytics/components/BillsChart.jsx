@@ -10,18 +10,19 @@ export default function BillsChart() {
   });
 
   const chartData = useMemo(() => {
-    if (!bills) return [];
+    const subscriptions = bills?.subscriptions;
+    if (!Array.isArray(subscriptions)) return [];
     
     // Group bills by month for charts
     const monthlyData = {};
-    bills.forEach(bill => {
-      const date = bill.date ? new Date(bill.date) : new Date();
+    subscriptions.forEach(bill => {
+      const date = bill.validityDate ? new Date(bill.validityDate) : new Date();
       const month = date.toLocaleString('default', { month: 'short' });
       if (!monthlyData[month]) {
         monthlyData[month] = { name: month, INR: 0, AED: 0 };
       }
-      monthlyData[month].INR += bill.priceINR || 0;
-      monthlyData[month].AED += bill.priceAED || 0;
+      monthlyData[month].INR += Number(bill.priceINR) || 0;
+      monthlyData[month].AED += Number(bill.priceAED) || 0;
     });
 
     return Object.values(monthlyData);

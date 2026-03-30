@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * Reusable skeleton loader for cards and stats
  */
