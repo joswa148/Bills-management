@@ -14,7 +14,7 @@ export const extractSubscriptionData = async (filePath) => {
   // Default mock data structure
   let extractedData = {
     serviceName: 'Detected Service',
-    invoiceId: null,
+    invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
     subject: null,
     senderAddress: '',
     clientAddress: '',
@@ -65,8 +65,13 @@ export const extractSubscriptionData = async (filePath) => {
       ...extractedData,
       serviceName: 'Netflix',
       category: 'Entertainment',
-      priceINR: 649,
-      priceAED: 29,
+      invoiceId: 'NET-' + Math.floor(Math.random() * 100000),
+      items: [
+        { description: 'Netflix Premium (Ultra HD)', quantity: 1, unitPrice: 649, amount: 649 }
+      ],
+      subtotal: 649,
+      amountDue: 649,
+      currency: 'INR',
       bankName: 'HDFC Bank',
       cardLast4: '1234'
     };
@@ -76,8 +81,14 @@ export const extractSubscriptionData = async (filePath) => {
       serviceName: 'AWS Cloud Services',
       category: 'Infrastructure',
       period: 'monthly',
-      priceINR: 12500,
-      priceAED: 550,
+      invoiceId: 'AWS-' + Math.floor(Math.random() * 100000),
+      items: [
+        { description: 'Amazon EC2 Instances', quantity: 720, unitPrice: 15, amount: 10800 },
+        { description: 'Amazon S3 Storage', quantity: 50, unitPrice: 34, amount: 1700 }
+      ],
+      subtotal: 12500,
+      amountDue: 12500,
+      currency: 'INR',
       bankName: 'ICICI Bank',
       region: 'India',
       cardLast4: '5678'
@@ -88,8 +99,13 @@ export const extractSubscriptionData = async (filePath) => {
       serviceName: 'Google Workspace',
       category: 'Productivity',
       period: 'monthly',
-      priceINR: 1400,
-      priceAED: 60,
+      invoiceId: 'GWS-' + Math.floor(Math.random() * 100000),
+      items: [
+        { description: 'Business Starter License', quantity: 10, unitPrice: 140, amount: 1400 }
+      ],
+      subtotal: 1400,
+      amountDue: 1400,
+      currency: 'INR',
       bankName: 'Axis Bank',
       cardLast4: '9012'
     };
@@ -99,8 +115,13 @@ export const extractSubscriptionData = async (filePath) => {
       serviceName: 'Spotify Premium',
       category: 'Entertainment',
       period: 'monthly',
-      priceINR: 119,
-      priceAED: 19,
+      invoiceId: 'SPT-' + Math.floor(Math.random() * 100000),
+      items: [
+        { description: 'Premium Family Plan', quantity: 1, unitPrice: 119, amount: 119 }
+      ],
+      subtotal: 119,
+      amountDue: 119,
+      currency: 'INR',
       bankName: 'SBI',
       cardLast4: '3456'
     };
