@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Upload, message, Progress, Button } from 'antd';
+import { Upload, Progress, Button } from 'antd';
+import { toast } from 'react-hot-toast';
 import { InboxOutlined, LoadingOutlined, CheckCircleFilled } from '@ant-design/icons';
 import axios from '../../../lib/axiosInstance';
 import { billsApi } from '../../../lib/api/billsApi';
@@ -45,7 +46,7 @@ export default function BillScanner({ onScanSuccess }) {
         setProgress(100);
         setSuccess(true);
         setLoading(false);
-        message.success('Bill scanned successfully!');
+        toast.success('Bill scanned successfully!');
         
         if (onScanSuccess) {
           onScanSuccess(data.extractedData);
@@ -57,7 +58,7 @@ export default function BillScanner({ onScanSuccess }) {
       setLoading(false);
       setScanning(false);
       setProgress(0);
-      message.error(error.response?.data?.message || 'Failed to scan bill');
+      toast.error(error.response?.data?.message || 'Failed to scan bill');
       onError(error);
     }
   };

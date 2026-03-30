@@ -10,17 +10,20 @@ export function useNotifications() {
 
   const notifications = useMemo(() => {
     const today = new Date();
+    if (!Array.isArray(subscriptions)) return [];
+    
     return subscriptions
-      .filter(sub => sub.status === 'Active')
+      .filter(sub => sub?.status?.toLowerCase() === 'active')
       .map(sub => {
+        if (!sub?.validityDate) return null;
         const daysLeft = differenceInDays(parseISO(sub.validityDate), today);
         if (daysLeft >= 0 && daysLeft <= 7) {
           return {
             id: `alert_${sub.id}`,
-            message: `${sub.name} is due for renewal in ${daysLeft} days.`,
+            message: `${sub.serviceName} is due for renewal in ${daysLeft} days.`,
             type: daysLeft <= 2 ? 'critical' : 'warning',
             date: sub.validityDate,
-            subName: sub.name
+            subName: sub.serviceName
           };
         }
         return null;

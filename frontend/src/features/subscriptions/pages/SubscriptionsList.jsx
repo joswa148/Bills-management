@@ -3,11 +3,12 @@ import { CreditCard, Plus, Download, Filter } from 'lucide-react';
 import SubscriptionTable from '../components/SubscriptionTable';
 import SubscriptionForm from '../components/SubscriptionForm';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
+import { TableSkeleton } from '../../../components/common/SkeletonLoaders';
 
 export default function SubscriptionsList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState(null);
-  const fetchSubscriptions = useSubscriptionStore((state) => state.fetchSubscriptions);
+  const { fetchSubscriptions, isLoading } = useSubscriptionStore();
 
   useEffect(() => {
     fetchSubscriptions();
@@ -50,7 +51,11 @@ export default function SubscriptionsList() {
       </div>
       
       <div className="max-w-7xl mx-auto w-full">
-        <SubscriptionTable onEdit={handleEdit} />
+        {isLoading ? (
+          <TableSkeleton rows={8} />
+        ) : (
+          <SubscriptionTable onEdit={handleEdit} />
+        )}
       </div>
 
       <SubscriptionForm 

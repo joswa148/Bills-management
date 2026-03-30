@@ -4,6 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import dayjs from 'dayjs';
+import { toast } from 'react-hot-toast';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import BillScanner from './BillScanner';
 
@@ -66,13 +67,15 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     try {
       if (initialValues) {
         await updateSubscription(initialValues.id, formattedData);
+        toast.success(`${data.serviceName} updated successfully`);
       } else {
         await addSubscription(formattedData);
+        toast.success(`${data.serviceName} added successfully`);
       }
       onCancel();
       reset();
     } catch (error) {
-      // Error handling is managed by the store/axios
+      toast.error(error.message || 'Something went wrong');
     }
   };
 

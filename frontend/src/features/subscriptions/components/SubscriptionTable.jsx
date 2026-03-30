@@ -3,6 +3,7 @@ import { Table, Tag, Space, Button, Tooltip, Avatar } from 'antd';
 import { Edit2, Trash2, ExternalLink } from 'lucide-react';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import { format, parseISO } from 'date-fns';
+import { toast } from 'react-hot-toast';
 
 export default function SubscriptionTable({ onEdit }) {
   const { subscriptions, deleteSubscription } = useSubscriptionStore();
@@ -99,7 +100,14 @@ export default function SubscriptionTable({ onEdit }) {
               type="text" 
               danger
               icon={<Trash2 size={16} />} 
-              onClick={() => deleteSubscription(record.id)}
+              onClick={async () => {
+                try {
+                  await deleteSubscription(record.id);
+                  toast.success('Subscription deleted successfully');
+                } catch (err) {
+                  toast.error('Failed to delete subscription');
+                }
+              }}
               className="hover:bg-red-50 rounded-lg flex items-center justify-center transition-all duration-200"
             />
           </Tooltip>

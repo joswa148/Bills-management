@@ -2,20 +2,22 @@ import React, { useMemo, useEffect } from 'react';
 import BillsChart from '../components/BillsChart';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import { TrendingUp, CreditCard, Clock, CheckCircle2 } from 'lucide-react';
+import { StatsSkeleton, CardSkeleton } from '../../../components/common/SkeletonLoaders';
 
 export default function Dashboard() {
-  const { subscriptions: bills, fetchSubscriptions } = useSubscriptionStore();
+  const { subscriptions: bills, fetchSubscriptions, isLoading } = useSubscriptionStore();
 
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
   const stats = useMemo(() => {
-    if (!bills) return { total: 0, paid: 0, pending: 0 };
+    if (!Array.isArray(bills)) return { total: 0, paid: 0, pending: 0 };
     return bills.reduce((acc, curr) => {
-      acc.total += curr.priceINR;
-      if (curr.status === 'Active') acc.paid += curr.priceINR; // Using Active as proxy for paid for now or add actual status
-      else acc.pending += curr.priceINR;
+      const price = Number(curr.priceINR) || 0;
+      acc.total += price;
+      if (curr.status?.toLowerCase() === 'active') acc.paid += price;
+      else acc.pending += price;
       return acc;
     }, { total: 0, paid: 0, pending: 0 });
   }, [bills]);
@@ -37,33 +39,41 @@ export default function Dashboard() {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto w-full">
-        {cards.map((card) => (
-          <div key={card.title} className="bg-white p-8 rounded-[2rem] border border-secondary-100 flex flex-col premium-shadow hover:scale-[1.02] transition-all duration-300 group">
-            <div className={`w-14 h-14 rounded-2xl ${card.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-              <card.icon className={`w-7 h-7 ${card.color}`} />
+        {isLoading ? (
+          <StatsSkeleton />
+        ) : (
+          cards.map((card) => (
+            <div key={card.title} className="bg-white p-8 rounded-[2rem] border border-secondary-100 flex flex-col premium-shadow hover:scale-[1.02] transition-all duration-300 group">
+              <div className={`w-14 h-14 rounded-2xl ${card.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                <card.icon className={`w-7 h-7 ${card.color}`} />
+              </div>
+              <h3 className="text-sm font-bold text-secondary-400 uppercase tracking-widest">{card.title}</h3>
+              <p className="text-3xl font-extrabold text-secondary-900 mt-3 tabular-nums">{card.value}</p>
+              <div className="mt-4 pt-4 border-t border-secondary-50">
+                <span className="text-[11px] font-bold text-secondary-400">{card.trend}</span>
+              </div>
             </div>
-            <h3 className="text-sm font-bold text-secondary-400 uppercase tracking-widest">{card.title}</h3>
-            <p className="text-3xl font-extrabold text-secondary-900 mt-3 tabular-nums">{card.value}</p>
-            <div className="mt-4 pt-4 border-t border-secondary-50">
-              <span className="text-[11px] font-bold text-secondary-400">{card.trend}</span>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <div className="max-w-7xl mx-auto w-full">
-        <div className="bg-white rounded-[2.5rem] border border-secondary-100 p-10 premium-shadow">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-secondary-900">Spending Trends</h3>
-            <select className="bg-secondary-50 border-none rounded-xl text-xs font-bold text-secondary-600 px-4 py-2 focus:ring-2 focus:ring-primary-500/20">
-              <option>Last 6 Months</option>
-              <option>Last Year</option>
-            </select>
+        {isLoading ? (
+          <CardSkeleton />
+        ) : (
+          <div className="bg-white rounded-[2.5rem] border border-secondary-100 p-10 premium-shadow">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-xl font-bold text-secondary-900">Spending Trends</h3>
+              <select className="bg-secondary-50 border-none rounded-xl text-xs font-bold text-secondary-600 px-4 py-2 focus:ring-2 focus:ring-primary-500/20">
+                <option>Last 6 Months</option>
+                <option>Last Year</option>
+              </select>
+            </div>
+            <div className="h-[350px] w-full bg-secondary-50/30 rounded-[2rem] flex items-center justify-center text-secondary-300 font-medium italic border border-dashed border-secondary-100">
+               <BillsChart />
+            </div>
           </div>
-          <div className="h-[350px] w-full bg-secondary-50/30 rounded-[2rem] flex items-center justify-center text-secondary-300 font-medium italic border border-dashed border-secondary-100">
-             <BillsChart />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -9,8 +9,8 @@ export const useSubscriptionStore = create((set, get) => ({
   fetchSubscriptions: async () => {
     set({ isLoading: true });
     try {
-      const data = await billsApi.getBills();
-      set({ subscriptions: data, isLoading: false });
+      const { subscriptions } = await billsApi.getBills();
+      set({ subscriptions, isLoading: false });
     } catch (error) {
       set({ error: error.message, isLoading: false });
     }
