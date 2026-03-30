@@ -19,7 +19,16 @@ export const register = async (userData) => {
     [id, email, passwordHash, name, 'viewer']
   );
 
-  return { id, email, name };
+  const token = jwt.sign(
+    { id, email, role: 'viewer' },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  return { 
+    user: { id, email, name, role: 'viewer' },
+    token 
+  };
 };
 
 export const login = async (email, password) => {

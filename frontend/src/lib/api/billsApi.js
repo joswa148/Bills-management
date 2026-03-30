@@ -1,39 +1,32 @@
-import { mockBills } from './mockData';
-
-// Simulate network delay
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import axios from '../axiosInstance';
 
 export const billsApi = {
   getBills: async () => {
-    await delay(500);
-    return mockBills;
+    const response = await axios.get('/subscriptions');
+    return response.data.data;
   },
   getBill: async (id) => {
-    await delay(500);
-    return mockBills.find(b => b.id === id);
+    const response = await axios.get(`/subscriptions/${id}`);
+    return response.data.data;
   },
   createBill: async (bill) => {
-    await delay(500);
-    const newBill = { ...bill, id: String(Date.now()) };
-    mockBills.push(newBill);
-    return newBill;
+    const response = await axios.post('/subscriptions', bill);
+    return response.data.data;
   },
   updateBill: async (id, data) => {
-    await delay(500);
-    const index = mockBills.findIndex(b => b.id === id);
-    if (index > -1) {
-      mockBills[index] = { ...mockBills[index], ...data };
-      return mockBills[index];
-    }
-    throw new Error("Bill not found");
+    const response = await axios.put(`/subscriptions/${id}`, data);
+    return response.data.data;
   },
   deleteBill: async (id) => {
-    await delay(500);
-    const index = mockBills.findIndex(b => b.id === id);
-    if (index > -1) {
-      mockBills.splice(index, 1);
-      return true;
-    }
-    return false;
+    await axios.delete(`/subscriptions/${id}`);
+    return true;
+  },
+  scanBill: async (formData) => {
+    const response = await axios.post('/subscriptions/scan', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.data;
   }
 };

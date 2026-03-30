@@ -10,12 +10,12 @@ export default function SubscriptionTable({ onEdit }) {
   const columns = [
     {
       title: 'Service',
-      dataIndex: 'name',
-      key: 'name',
+      dataIndex: 'serviceName',
+      key: 'serviceName',
       render: (text, record) => (
         <div className="flex items-center space-x-3">
           <Avatar 
-            src={record.logo} 
+            src={`https://logo.clearbit.com/${text.toLowerCase().replace(/\s+/g, '')}.com`} 
             shape="square" 
             className="border border-secondary-100 bg-white"
           >
@@ -33,7 +33,7 @@ export default function SubscriptionTable({ onEdit }) {
       dataIndex: 'period',
       key: 'period',
       render: (period) => (
-        <Tag color={period === 'Yearly' ? 'purple' : 'blue'} className="rounded-md px-2 font-medium">
+        <Tag color={period.toLowerCase() === 'yearly' ? 'purple' : 'blue'} className="rounded-md px-2 font-medium capitalize">
           {period}
         </Tag>
       ),
@@ -42,7 +42,7 @@ export default function SubscriptionTable({ onEdit }) {
       title: 'Price (INR)',
       dataIndex: 'priceINR',
       key: 'priceINR',
-      render: (val) => <span className="font-bold text-secondary-900 tabular-nums">₹{val.toLocaleString()}</span>,
+      render: (val) => <span className="font-bold text-secondary-900 tabular-nums">₹{Number(val).toLocaleString()}</span>,
     },
     {
       title: 'Price (AED)',
@@ -76,8 +76,8 @@ export default function SubscriptionTable({ onEdit }) {
       key: 'status',
       render: (status) => (
         <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-2 ${status === 'Active' ? 'bg-emerald-500' : 'bg-secondary-300'}`} />
-          <span className={`text-sm font-medium ${status === 'Active' ? 'text-emerald-700' : 'text-secondary-500'}`}>{status}</span>
+          <div className={`w-2 h-2 rounded-full mr-2 ${status.toLowerCase() === 'active' ? 'bg-emerald-500' : 'bg-secondary-300'}`} />
+          <span className={`text-sm font-medium capitalize ${status.toLowerCase() === 'active' ? 'text-emerald-700' : 'text-secondary-500'}`}>{status}</span>
         </div>
       ),
     },

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Upload, message, Progress, Button } from 'antd';
 import { InboxOutlined, LoadingOutlined, CheckCircleFilled } from '@ant-design/icons';
-import axios from 'axios';
+import axios from '../../../lib/axiosInstance';
+import { billsApi } from '../../../lib/api/billsApi';
 
 const { Dragger } = Upload;
 
@@ -23,18 +24,8 @@ export default function BillScanner({ onScanSuccess }) {
     try {
       // Step 1: Uploading
       setProgress(30);
-      const token = localStorage.getItem('token');
       
-      const response = await axios.post('/api/subscriptions/scan', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
-        },
-        onUploadProgress: (event) => {
-          const percent = Math.floor((event.loaded / event.total) * 100);
-          if (percent < 90) setProgress(30 + percent / 3);
-        }
-      });
+      const data = await billsApi.scanBill(formData);
 
       // Step 2: Scanning Animation
       setProgress(70);
@@ -57,7 +48,7 @@ export default function BillScanner({ onScanSuccess }) {
         message.success('Bill scanned successfully!');
         
         if (onScanSuccess) {
-          onScanSuccess(response.data.data.extractedData);
+          onScanSuccess(data.extractedData);
         }
         onSuccess("OK");
       }, 3000);

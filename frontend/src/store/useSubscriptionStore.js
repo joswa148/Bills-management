@@ -1,40 +1,66 @@
 import { create } from 'zustand';
-import { mockSubscriptions } from '../lib/mockData';
+import { billsApi } from '../lib/api/billsApi';
 
-/**
- * @typedef {import('../lib/mockData').Subscription} Subscription
- */
-
-/**
- * @typedef {Object} SubscriptionStore
- * @property {Subscription[]} subscriptions
- * @property {boolean} isLoading
- * @property {(subscription: Subscription) => void} addSubscription
- * @property {(id: string, updates: Partial<Subscription>) => void} updateSubscription
- * @property {(id: string) => void} deleteSubscription
- * @property {(subscriptions: Subscription[]) => void} setSubscriptions
- */
-
-export const useSubscriptionStore = create((set) => ({
-  subscriptions: mockSubscriptions, // Start with mock data
+export const useSubscriptionStore = create((set, get) => ({
+  subscriptions: [],
   isLoading: false,
+  error: null,
+
+  fetchSubscriptions: async () => {
+    set({ isLoading: true });
+    try {
+      const data = await billsApi.getBills();
+      set({ subscriptions: data, isLoading: false });
+    } catch (error) {
+      set({ error: error.message, isLoading: false });
+    }
+  },
+
+  addSubscription: async (subscription) => {
+    set({ isLoading: true });
+    try {
+      const newSub = await billsApi.createBill(subscription);
+      set((state) => ({ 
+        subscriptions: [newSub, ...state.subscriptions],
+        isLoading: false 
+      }));
+      return newSub;
+    } catch (error) {
+      set({ error: error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateSubscription: async (id, updates) => {
+    set({ isLoading: true });
+    try {
+      const updatedSub = await billsApi.updateBill(id, updates);
+      set((state) => ({
+        subscriptions: state.subscriptions.map((sub) =>
+          sub.id === id ? updatedSub : sub
+        ),
+        isLoading: false
+      }));
+      return updatedSub;
+    } catch (error) {
+      set({ error: error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  deleteSubscription: async (id) => {
+    set({ isLoading: true });
+    try {
+      await billsApi.deleteBill(id);
+      set((state) => ({
+        subscriptions: state.subscriptions.filter((sub) => sub.id !== id),
+        isLoading: false
+      }));
+    } catch (error) {
+      set({ error: error.message, isLoading: false });
+      throw error;
+    }
+  },
 
   setSubscriptions: (subscriptions) => set({ subscriptions }),
-
-  addSubscription: (subscription) => 
-    set((state) => ({ 
-      subscriptions: [subscription, ...state.subscriptions] 
-    })),
-
-  updateSubscription: (id, updates) =>
-    set((state) => ({
-      subscriptions: state.subscriptions.map((sub) =>
-        sub.id === id ? { ...sub, ...updates } : sub
-      ),
-    })),
-
-  deleteSubscription: (id) =>
-    set((state) => ({
-      subscriptions: state.subscriptions.filter((sub) => sub.id !== id),
-    })),
 }));

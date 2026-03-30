@@ -1,10 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import BillsChart from '../components/BillsChart';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import { TrendingUp, CreditCard, Clock, CheckCircle2 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { subscriptions: bills } = useSubscriptionStore();
+  const { subscriptions: bills, fetchSubscriptions } = useSubscriptionStore();
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
 
   const stats = useMemo(() => {
     if (!bills) return { total: 0, paid: 0, pending: 0 };

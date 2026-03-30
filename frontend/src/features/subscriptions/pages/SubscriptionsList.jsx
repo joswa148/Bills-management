@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Download, Filter } from 'lucide-react';
 import SubscriptionTable from '../components/SubscriptionTable';
 import SubscriptionForm from '../components/SubscriptionForm';
+import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 
 export default function SubscriptionsList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState(null);
+  const fetchSubscriptions = useSubscriptionStore((state) => state.fetchSubscriptions);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
 
   const handleAdd = () => {
     setEditingSubscription(null);

@@ -8,16 +8,16 @@ import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import BillScanner from './BillScanner';
 
 const schema = z.object({
-  name: z.string().min(2, 'Service name is required'),
+  serviceName: z.string().min(2, 'Service name is required'),
   category: z.string().min(2, 'Category is required'),
-  period: z.enum(['Monthly', 'Yearly', 'Quarterly']),
+  period: z.enum(['monthly', 'yearly', 'quarterly']),
   priceINR: z.number().positive('Price must be positive'),
   priceAED: z.number().positive('Price must be positive'),
   validityDate: z.any().refine((val) => val !== null, 'Validity date is required'),
   paymentMethod: z.string().min(2, 'Payment method is required'),
-  bank: z.string().min(2, 'Bank is required'),
+  bankName: z.string().min(2, 'Bank is required'),
   region: z.enum(['India', 'UAE']),
-  status: z.enum(['Active', 'Inactive']),
+  status: z.enum(['active', 'cancelled', 'paused']),
 });
 
 export default function SubscriptionForm({ open, onCancel, initialValues }) {
@@ -26,9 +26,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const { control, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      period: 'Monthly',
+      period: 'monthly',
       region: 'India',
-      status: 'Active',
+      status: 'active',
     }
   });
 
@@ -36,10 +36,8 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     reset({
       ...data,
       validityDate: dayjs(data.validityDate),
-      name: data.serviceName, // Backend returns serviceName, frontend uses name
-      bank: data.bankName,    // Backend returns bankName, frontend uses bank
-      status: data.status ? (data.status.charAt(0).toUpperCase() + data.status.slice(1)) : 'Active',
-      period: data.period ? (data.period.charAt(0).toUpperCase() + data.period.slice(1)) : 'Monthly',
+      status: data.status || 'active',
+      period: data.period || 'monthly',
       region: data.region || 'India'
     });
   };
@@ -52,29 +50,30 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       });
     } else {
       reset({
-        period: 'Monthly',
+        period: 'monthly',
         region: 'India',
-        status: 'Active',
+        status: 'active',
       });
     }
   }, [initialValues, reset, open]);
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     const formattedData = {
       ...data,
-      id: initialValues?.id || `sub_${new Date().getTime()}`,
       validityDate: data.validityDate.format('YYYY-MM-DD'),
-      logo: `https://logo.clearbit.com/${data.name.toLowerCase().replace(/\s+/g, '')}.com`
     };
 
-    if (initialValues) {
-      updateSubscription(initialValues.id, formattedData);
-    } else {
-      addSubscription(formattedData);
+    try {
+      if (initialValues) {
+        await updateSubscription(initialValues.id, formattedData);
+      } else {
+        await addSubscription(formattedData);
+      }
+      onCancel();
+      reset();
+    } catch (error) {
+      // Error handling is managed by the store/axios
     }
-    
-    onCancel();
-    reset();
   };
 
   return (
@@ -91,9 +90,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       
       <Form layout="vertical" onFinish={handleSubmit(onSubmit)} className="mt-6">
         <div className="grid grid-cols-2 gap-x-6">
-          <Form.Item label="Service Name" validateStatus={errors.name ? 'error' : ''} help={errors.name?.message}>
+          <Form.Item label="Service Name" validateStatus={errors.serviceName ? 'error' : ''} help={errors.serviceName?.message}>
             <Controller
-              name="name"
+              name="serviceName"
               control={control}
               render={({ field }) => <Input {...field} placeholder="e.g. Netflix" className="rounded-xl py-2.5" />}
             />
@@ -113,9 +112,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
               control={control}
               render={({ field }) => (
                 <Select {...field} className="premium-select">
-                  <Select.Option value="Monthly">Monthly</Select.Option>
-                  <Select.Option value="Yearly">Yearly</Select.Option>
-                  <Select.Option value="Quarterly">Quarterly</Select.Option>
+                  <Select.Option value="monthly">Monthly</Select.Option>
+                  <Select.Option value="yearly">Yearly</Select.Option>
+                  <Select.Option value="quarterly">Quarterly</Select.Option>
                 </Select>
               )}
             />
@@ -153,9 +152,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Bank" validateStatus={errors.bank ? 'error' : ''} help={errors.bank?.message}>
+          <Form.Item label="Bank" validateStatus={errors.bankName ? 'error' : ''} help={errors.bankName?.message}>
             <Controller
-              name="bank"
+              name="bankName"
               control={control}
               render={({ field }) => <Input {...field} placeholder="e.g. HDFC" className="rounded-xl py-2.5" />}
             />
@@ -180,8 +179,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
               control={control}
               render={({ field }) => (
                 <Select {...field} className="premium-select">
-                  <Select.Option value="Active">Active</Select.Option>
-                  <Select.Option value="Inactive">Inactive</Select.Option>
+                  <Select.Option value="active">Active</Select.Option>
+                  <Select.Option value="cancelled">Cancelled</Select.Option>
+                  <Select.Option value="paused">Paused</Select.Option>
                 </Select>
               )}
             />

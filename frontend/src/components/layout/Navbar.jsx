@@ -1,10 +1,33 @@
 import React from 'react';
-import { Bell, Search, User, Filter } from 'lucide-react';
+import { Bell, Search, User, Filter, LogOut } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useAuthStore } from '../../store/useAuthStore';
+import { Dropdown, message } from 'antd';
 
 export default function Navbar() {
   const { notifications } = useNotifications();
+  const { user, logout } = useAuthStore();
   const hasNotifications = notifications.length > 0;
+
+  const handleLogout = () => {
+    logout();
+    message.success('Logged out successfully');
+  };
+
+  const userMenuItems = [
+    {
+      key: 'profile',
+      label: 'My Profile',
+      icon: <User size={14} />,
+    },
+    {
+      key: 'logout',
+      label: 'Sign Out',
+      icon: <LogOut size={14} />,
+      danger: true,
+      onClick: handleLogout,
+    },
+  ];
 
   return (
     <header className="flex-shrink-0 h-20 bg-white/80 backdrop-blur-md border-b border-secondary-100 flex items-center justify-between px-8 z-10 sticky top-0">
@@ -40,18 +63,20 @@ export default function Navbar() {
 
         <div className="h-8 w-[1px] bg-secondary-100 mx-2" />
 
-        <div className="flex items-center space-x-3.5 cursor-pointer group pl-2">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-2xl bg-primary-100 flex items-center justify-center text-primary-600 group-hover:bg-primary-600 group-hover:text-white transition-all duration-300 shadow-sm">
-              <User className="h-5.5 w-5.5" />
+        <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
+          <div className="flex items-center space-x-3.5 cursor-pointer group pl-2">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-2xl bg-primary-100 flex items-center justify-center text-primary-600 group-hover:bg-primary-600 group-hover:text-white transition-all duration-300 shadow-sm">
+                <User className="h-5.5 w-5.5" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+            <div className="hidden lg:block">
+              <p className="text-sm font-bold text-secondary-900 leading-tight">{user?.name || 'User'}</p>
+              <p className="text-[11px] text-secondary-500 font-medium">{user?.role === 'admin' ? 'Pro Account' : 'Free Plan'}</p>
+            </div>
           </div>
-          <div className="hidden lg:block">
-            <p className="text-sm font-bold text-secondary-900 leading-tight">Admin User</p>
-            <p className="text-[11px] text-secondary-500 font-medium">Pro Account</p>
-          </div>
-        </div>
+        </Dropdown>
       </div>
     </header>
   );

@@ -15,8 +15,8 @@ const loginSchema = z.object({
 export const handleRegister = async (req, res, next) => {
   try {
     const validatedData = registerSchema.parse(req.body);
-    const user = await authService.register(validatedData);
-    res.status(201).json({ status: 'success', data: { user } });
+    const { user, token } = await authService.register(validatedData);
+    res.status(201).json({ status: 'success', data: { user, token } });
   } catch (error) {
     next(error);
   }
