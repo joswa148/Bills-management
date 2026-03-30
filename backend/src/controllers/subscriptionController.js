@@ -1,42 +1,40 @@
 import * as subscriptionService from '../services/subscriptionService.js';
 import { z } from 'zod';
 
-const subscriptionSchema = z.object({
+const invoiceItemSchema = z.object({
+  description: z.string().min(1),
+  quantity: z.number().default(1),
+  unitPrice: z.number(),
+  amount: z.number()
+});
+
+const billingSchema = z.object({
   serviceName: z.string().min(1),
-  invoiceId: z.string().optional().nullable(),
-  subject: z.string().optional().nullable(),
   category: z.string().optional(),
   period: z.enum(['monthly', 'quarterly', 'yearly']),
-  priceINR: z.number(),
-  priceAED: z.number(),
-  subtotal: z.number().optional().nullable(),
-  discount: z.number().optional().nullable(),
-  amountDue: z.number().optional().nullable(),
-  validityDate: z.string(),
-  issueDate: z.string().optional().nullable(),
+  senderAddress: z.string().optional().nullable(),
+  clientAddress: z.string().optional().nullable(),
+  invoiceIdNumber: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  issueDate: z.string().min(1),
   dueDate: z.string().optional().nullable(),
   poNumber: z.string().optional().nullable(),
-  paymentMethod: z.string(),
-  bankName: z.string(),
-  region: z.enum(['India', 'UAE']),
-  status: z.enum(['active', 'cancelled', 'paused']),
-  notes: z.string().optional(),
+  subtotal: z.number(),
+  discount: z.number().optional().nullable(),
+  amountDue: z.number(),
+  currency: z.string().default('INR'),
+  paymentMethod: z.string().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  cardLast4: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  items: z.array(invoiceItemSchema).optional().nullable(),
+  region: z.enum(['India', 'UAE']).optional()
 });
 
 export const listSubscriptions = async (req, res, next) => {
   try {
-    const filters = req.query;
-    const subscriptions = await subscriptionService.getAllSubscriptions(req.user.id, filters);
+    const subscriptions = await subscriptionService.getAllSubscriptions(req.user.id);
     res.status(200).json({ status: 'success', data: { subscriptions } });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getSubscription = async (req, res, next) => {
-  try {
-    const subscription = await subscriptionService.getSubscriptionById(req.params.id, req.user.id);
-    res.status(200).json({ status: 'success', data: { subscription } });
   } catch (error) {
     next(error);
   }
@@ -44,9 +42,44 @@ export const getSubscription = async (req, res, next) => {
 
 export const addSubscription = async (req, res, next) => {
   try {
-    const validatedData = subscriptionSchema.parse(req.body);
-    const subscription = await subscriptionService.createSubscription(req.user.id, validatedData);
-    res.status(201).json({ status: 'success', data: { subscription } });
+    const validatedData = billingSchema.parse(req.body);
+    
+    // Map camelCase to snake_case for the service layer
+    const processData = {
+      ...validatedData,
+      invoice_id_number: validatedData.invoiceIdNumber,
+      sender_address: validatedData.senderAddress,
+      client_address: validatedData.clientAddress,
+      issue_date: validatedData.issueDate,
+      due_date: validatedData.dueDate,
+      po_number: validatedData.poNumber,
+      amount_due: validatedData.amountDue,
+      payment_method: validatedData.paymentMethod,
+      card_last4: validatedData.cardLast4,
+      bank_name: validatedData.bankName
+    };
+
+    const result = await subscriptionService.processInvoice(req.user.id, processData);
+    res.status(201).json({ status: 'success', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listInvoices = async (req, res, next) => {
+  try {
+    const invoices = await subscriptionService.getAllInvoices(req.user.id);
+    res.status(200).json({ status: 'success', data: { invoices } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInvoice = async (req, res, next) => {
+  try {
+    const invoice = await subscriptionService.getInvoiceDetails(req.params.id, req.user.id);
+    if (!invoice) return res.status(404).json({ status: 'error', message: 'Invoice not found' });
+    res.status(200).json({ status: 'success', data: { invoice } });
   } catch (error) {
     next(error);
   }
@@ -54,9 +87,8 @@ export const addSubscription = async (req, res, next) => {
 
 export const editSubscription = async (req, res, next) => {
   try {
-    const validatedData = subscriptionSchema.partial().parse(req.body);
-    const subscription = await subscriptionService.updateSubscription(req.params.id, req.user.id, validatedData);
-    res.status(200).json({ status: 'success', data: { subscription } });
+    // Basic update logic for now
+    res.status(501).json({ status: 'error', message: 'Use addSubscription to process new invoices' });
   } catch (error) {
     next(error);
   }

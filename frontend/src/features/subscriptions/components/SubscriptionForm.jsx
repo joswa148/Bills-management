@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Select, DatePicker, Button, Space } from 'antd';
-import { useForm, Controller } from 'react-hook-form';
+import { Modal, Form, Input, InputNumber, Select, DatePicker, Button, Space, Table, Divider } from 'antd';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { Plus, Trash2, MapPin, Building, List } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import dayjs from 'dayjs';
@@ -12,45 +13,72 @@ const schema = z.object({
   serviceName: z.string().min(2, 'Service name is required'),
   category: z.string().min(2, 'Category is required'),
   period: z.enum(['monthly', 'yearly', 'quarterly']),
-  priceINR: z.number().min(0, 'Price must be 0 or positive'),
-  priceAED: z.number().min(0, 'Price must be 0 or positive'),
-  validityDate: z.any().refine((val) => val !== null, 'Validity date is required'),
-  paymentMethod: z.string().min(2, 'Payment method is required'),
-  bankName: z.string().min(2, 'Bank is required'),
+  senderAddress: z.string().optional().nullable(),
+  clientAddress: z.string().optional().nullable(),
+  invoiceIdNumber: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  issueDate: z.any().refine((val) => val !== null, 'Issue date is required'),
+  dueDate: z.any().optional().nullable(),
+  poNumber: z.string().optional().nullable(),
+  subtotal: z.number().min(0),
+  discount: z.number().optional().nullable(),
+  amountDue: z.number().min(0),
+  currency: z.string().default('INR'),
+  paymentMethod: z.string().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  cardLast4: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
   region: z.enum(['India', 'UAE']),
   status: z.enum(['active', 'cancelled', 'paused']),
-  invoiceId: z.string().optional().nullable(),
-  subject: z.string().optional().nullable(),
-  poNumber: z.string().optional().nullable(),
-  issueDate: z.any().optional().nullable(),
-  dueDate: z.any().optional().nullable(),
-  subtotal: z.number().optional().nullable(),
-  discount: z.number().optional().nullable(),
-  amountDue: z.number().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  items: z.array(z.object({
+    description: z.string().min(1, 'Description required'),
+    quantity: z.number().min(1),
+    unitPrice: z.number().min(0),
+    amount: z.number().min(0)
+  })).optional()
 });
 
 export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const { addSubscription, updateSubscription } = useSubscriptionStore();
   
-  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
       period: 'monthly',
       region: 'India',
       status: 'active',
+      items: [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }],
+      currency: 'INR'
     }
   });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "items"
+  });
+
+  const watchItems = watch("items");
+
+  // Calculate totals when items change
+  useEffect(() => {
+    if (watchItems) {
+      const subtotal = watchItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
+      setValue('subtotal', subtotal);
+      const discount = watch('discount') || 0;
+      setValue('amountDue', Math.max(0, subtotal - discount));
+    }
+  }, [watchItems, setValue, watch]);
 
   const handleScanSuccess = (data) => {
     reset({
       ...data,
-      validityDate: data.validityDate ? dayjs(data.validityDate) : null,
-      issueDate: data.issueDate ? dayjs(data.issueDate) : null,
+      issueDate: data.issueDate ? dayjs(data.issueDate) : dayjs(),
       dueDate: data.dueDate ? dayjs(data.dueDate) : null,
       status: data.status || 'active',
       period: data.period || 'monthly',
-      region: data.region || 'India'
+      region: data.region || 'India',
+      invoiceIdNumber: data.invoiceId, // Map from scanner ID to our new schema
+      items: data.items && data.items.length > 0 ? data.items : [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }]
     });
   };
 
@@ -58,8 +86,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     if (initialValues) {
       reset({
         ...initialValues,
-        validityDate: initialValues.validityDate ? dayjs(initialValues.validityDate) : null,
-        issueDate: initialValues.issueDate ? dayjs(initialValues.issueDate) : null,
+        issueDate: initialValues.issueDate ? dayjs(initialValues.issueDate) : dayjs(),
         dueDate: initialValues.dueDate ? dayjs(initialValues.dueDate) : null,
       });
     } else {
@@ -69,15 +96,11 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
         status: 'active',
         serviceName: '',
         category: 'General',
-        priceINR: 0,
-        priceAED: 0,
-        invoiceId: '',
-        poNumber: '',
-        subject: '',
-        notes: '',
         subtotal: 0,
         discount: 0,
-        amountDue: 0
+        amountDue: 0,
+        currency: 'INR',
+        items: [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }]
       });
     }
   }, [initialValues, reset, open]);
@@ -85,18 +108,17 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const onSubmit = async (data) => {
     const formattedData = {
       ...data,
-      validityDate: data.validityDate ? data.validityDate.format('YYYY-MM-DD') : null,
-      issueDate: data.issueDate && data.issueDate.isValid ? data.issueDate.format('YYYY-MM-DD') : null,
+      issueDate: data.issueDate ? data.issueDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
       dueDate: data.dueDate && data.dueDate.isValid ? data.dueDate.format('YYYY-MM-DD') : null,
     };
 
     try {
       if (initialValues) {
-        await updateSubscription(initialValues.id, formattedData);
-        toast.success(`${data.serviceName} updated successfully`);
+        // We'll update master subscription if needed, or just create new invoice
+        toast.error('Direct editing of historical invoices disabled for integrity');
       } else {
         await addSubscription(formattedData);
-        toast.success(`${data.serviceName} added successfully`);
+        toast.success(`Invoice for ${data.serviceName} processed successfully`);
       }
       onCancel();
       reset();
@@ -140,7 +162,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Billing Period">
+          <Form.Item label="Subscription Period">
             <Controller
               name="period"
               control={control}
@@ -154,22 +176,39 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Validity Date" validateStatus={errors.validityDate ? 'error' : ''} help={errors.validityDate?.message}>
+          <div className="col-span-2 mt-6 mb-2 pb-2 border-b border-secondary-100 flex items-center">
+            <span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>
+            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Address Details</span>
+          </div>
+
+          <Form.Item label="Sender Address (From)" className="col-span-2">
             <Controller
-              name="validityDate"
+              name="senderAddress"
               control={control}
-              render={({ field }) => <DatePicker {...field} className="w-full rounded-xl py-2.5" />}
+              render={({ field }) => (
+                <Input.TextArea {...field} rows={3} placeholder="Company Name&#10;Address Line 1&#10;City, State, ZIP" className="rounded-xl font-mono text-xs" />
+              )}
+            />
+          </Form.Item>
+
+          <Form.Item label="Client Address (Invoice For)" className="col-span-2">
+            <Controller
+              name="clientAddress"
+              control={control}
+              render={({ field }) => (
+                <Input.TextArea {...field} rows={3} placeholder="Client Name&#10;Address Line 1&#10;City, State, ZIP" className="rounded-xl font-mono text-xs" />
+              )}
             />
           </Form.Item>
 
           <div className="col-span-2 mt-6 mb-2 pb-2 border-b border-secondary-100 flex items-center">
             <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
-            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Invoice Details</span>
+            <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Invoice Identification</span>
           </div>
 
-          <Form.Item label="Invoice ID" validateStatus={errors.invoiceId ? 'error' : ''} help={errors.invoiceId?.message}>
+          <Form.Item label="Invoice ID #" validateStatus={errors.invoiceIdNumber ? 'error' : ''} help={errors.invoiceIdNumber?.message}>
             <Controller
-              name="invoiceId"
+              name="invoiceIdNumber"
               control={control}
               render={({ field }) => <Input {...field} placeholder="e.g. INV-001" className="rounded-xl py-2.5" />}
             />
@@ -199,13 +238,101 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Subject" className="col-span-2" validateStatus={errors.subject ? 'error' : ''} help={errors.subject?.message}>
+          <Form.Item label="Subject / Description" className="col-span-2" validateStatus={errors.subject ? 'error' : ''} help={errors.subject?.message}>
             <Controller
               name="subject"
               control={control}
-              render={({ field }) => <Input {...field} placeholder="Invoice for Monthly Subscription" className="rounded-xl py-2.5" />}
+              render={({ field }) => <Input {...field} placeholder="e.g. Software Consulting Services" className="rounded-xl py-2.5" />}
             />
           </Form.Item>
+
+          <div className="col-span-2 mt-6 mb-4 pb-2 border-b border-secondary-100 flex items-center justify-between">
+            <div className="flex items-center">
+              <span className="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+              <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Line Items</span>
+            </div>
+            <Button 
+              type="dashed" 
+              size="small" 
+              onClick={() => append({ description: '', quantity: 1, unitPrice: 0, amount: 0 })}
+              icon={<Plus size={14} />}
+              className="rounded-lg flex items-center"
+            >
+              Add Item
+            </Button>
+          </div>
+
+          <div className="col-span-2 mb-6">
+            <div className="bg-secondary-50 rounded-2xl overflow-hidden border border-secondary-100">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-secondary-100/50 text-[10px] font-bold text-secondary-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3 w-20">Qty</th>
+                    <th className="px-4 py-3 w-32">Price</th>
+                    <th className="px-4 py-3 w-32">Amount</th>
+                    <th className="px-4 py-3 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-secondary-100">
+                  {fields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td className="px-2 py-2">
+                        <Controller
+                          name={`items.${index}.description`}
+                          control={control}
+                          render={({ field }) => <Input {...field} placeholder="Item description" bordered={false} className="text-xs" />}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <Controller
+                          name={`items.${index}.quantity`}
+                          control={control}
+                          render={({ field }) => <InputNumber {...field} bordered={false} className="w-full text-xs" />}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <Controller
+                          name={`items.${index}.unitPrice`}
+                          control={control}
+                          render={({ field }) => (
+                            <InputNumber 
+                              {...field} 
+                              bordered={false} 
+                              className="w-full text-xs" 
+                              onChange={(val) => {
+                                field.onChange(val);
+                                const qty = watch(`items.${index}.quantity`) || 1;
+                                setValue(`items.${index}.amount`, (val || 0) * qty);
+                              }}
+                            />
+                          )}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <Controller
+                          name={`items.${index}.amount`}
+                          control={control}
+                          render={({ field }) => <InputNumber {...field} bordered={false} readOnly className="w-full text-xs font-bold" />}
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <Button 
+                          type="text" 
+                          danger 
+                          size="small" 
+                          icon={<Trash2 size={14} />} 
+                          onClick={() => remove(index)}
+                          className="flex items-center justify-center opacity-50 hover:opacity-100"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
 
           <div className="col-span-2 mt-6 mb-2 pb-2 border-b border-secondary-100 flex items-center">
             <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
@@ -228,19 +355,18 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Price (INR)" validateStatus={errors.priceINR ? 'error' : ''} help={errors.priceINR?.message}>
+          <Form.Item label="Final Amount Due" className="col-span-2" validateStatus={errors.amountDue ? 'error' : ''} help={errors.amountDue?.message}>
             <Controller
-              name="priceINR"
+              name="amountDue"
               control={control}
-              render={({ field }) => <InputNumber {...field} className="w-full rounded-xl py-2" placeholder="0" />}
-            />
-          </Form.Item>
-
-          <Form.Item label="Price (AED)" validateStatus={errors.priceAED ? 'error' : ''} help={errors.priceAED?.message}>
-            <Controller
-              name="priceAED"
-              control={control}
-              render={({ field }) => <InputNumber {...field} className="w-full rounded-xl py-2" placeholder="0" />}
+              render={({ field }) => (
+                <InputNumber 
+                  {...field} 
+                  className="w-full rounded-xl py-2 bg-primary-50 font-bold text-primary-900 border-primary-200" 
+                  placeholder="0"
+                  prefix={<span className="text-secondary-400 font-medium">INR</span>}
+                />
+              )}
             />
           </Form.Item>
 
@@ -251,6 +377,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
               render={({ field }) => <Input {...field} placeholder="e.g. Visa 4242" className="rounded-xl py-2.5" />}
             />
           </Form.Item>
+
 
           <Form.Item label="Bank" validateStatus={errors.bankName ? 'error' : ''} help={errors.bankName?.message}>
             <Controller

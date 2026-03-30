@@ -1,4 +1,4 @@
--- SQL Schema for Bills Management System (MariaDB/MySQL)
+-- SQL Schema for Modern Billing Management System (MariaDB/MySQL)
 
 -- Users Table
 CREATE TABLE IF NOT EXISTS users (
@@ -12,48 +12,70 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Subscriptions Table
+-- Subscriptions Table (Master Records)
 CREATE TABLE IF NOT EXISTS subscriptions (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     service_name VARCHAR(255) NOT NULL,
-    invoice_id VARCHAR(255),
-    subject VARCHAR(255),
     category VARCHAR(255) DEFAULT 'General',
     period ENUM('monthly', 'quarterly', 'yearly') NOT NULL,
-    price_inr DECIMAL(10, 2) NOT NULL,
-    price_aed DECIMAL(10, 2) NOT NULL,
-    subtotal DECIMAL(10, 2),
-    discount DECIMAL(10, 2),
-    amount_due DECIMAL(10, 2),
-    total_yearly DECIMAL(10, 2),
-    validity_date DATE NOT NULL,
-    issue_date DATE,
-    due_date DATE,
-    po_number VARCHAR(255),
-    payment_method VARCHAR(255) NOT NULL,
-    card_last4 VARCHAR(4),
-    bank_name VARCHAR(255) NOT NULL,
-    region ENUM('India', 'UAE') NOT NULL,
     status ENUM('active', 'cancelled', 'paused') DEFAULT 'active',
-    notes TEXT,
+    last_invoice_date DATE,
+    next_billing_date DATE,
+    region ENUM('India', 'UAE') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Invoices Table (Individual Bills)
+CREATE TABLE IF NOT EXISTS invoices (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    subscription_id VARCHAR(36),
+    invoice_id_number VARCHAR(255), -- The ID from the paper/PDF
+    sender_address TEXT,
+    client_address TEXT,
+    subject VARCHAR(255),
+    issue_date DATE NOT NULL,
+    due_date DATE,
+    po_number VARCHAR(255),
+    subtotal DECIMAL(10, 2) NOT NULL,
+    discount DECIMAL(10, 2) DEFAULT 0,
+    amount_due DECIMAL(10, 2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'INR',
+    payment_method VARCHAR(255),
+    card_last4 VARCHAR(4),
+    bank_name VARCHAR(255),
+    notes TEXT,
+    status ENUM('draft', 'processed', 'paid', 'overdue') DEFAULT 'processed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
+);
+
+-- Invoice Items Table
+CREATE TABLE IF NOT EXISTS invoice_items (
+    id VARCHAR(36) PRIMARY KEY,
+    invoice_id VARCHAR(36) NOT NULL,
+    description TEXT NOT NULL,
+    quantity DECIMAL(10, 2) DEFAULT 1,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
 );
 
 -- Notifications Table
 CREATE TABLE IF NOT EXISTS notifications (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
-    subscription_id VARCHAR(36),
-    type ENUM('upcoming_bill', 'overdue', 'payment_confirmation') NOT NULL,
+    type ENUM('upcoming_bill', 'overdue', 'payment_confirmation', 'invoice_processed') NOT NULL,
     message TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     email_sent BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Audit Logs Table
@@ -71,9 +93,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_validity_date ON subscriptions(validity_date);
-CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-CREATE INDEX idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_notifications_sent_at ON notifications(sent_at);
+CREATE INDEX idx_subscriptions_user_base ON subscriptions(user_id, status);
+CREATE INDEX idx_invoices_user_date ON invoices(user_id, issue_date);
+CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id);
+CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);

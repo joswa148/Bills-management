@@ -78,3 +78,30 @@ export const markAsRead = async (id, userId) => {
   );
   return true;
 };
+
+export const createInvoiceNotification = async (userId, invoiceData) => {
+  const { serviceName, invoiceId, amountDue, currency, status } = invoiceData;
+  const id = crypto.randomUUID();
+  const type = 'invoice_processed';
+  const message = `Invoice ${invoiceId} for ${serviceName} has been processed: ${currency} ${amountDue}.`;
+
+  // Get user details for email
+  const [user] = await pool.execute('SELECT email, name FROM users WHERE id = ?', [userId]);
+  
+  let emailSent = false;
+  if (user.length > 0) {
+    try {
+      await sendInvoiceConfirmation(user[0].email, user[0].name, invoiceData);
+      emailSent = true;
+    } catch (error) {
+      console.error(`Failed to send invoice email to ${user[0].email}:`, error);
+    }
+  }
+
+  await pool.execute(
+    'INSERT INTO notifications (id, user_id, type, message, email_sent) VALUES (?, ?, ?, ?, ?)',
+    [id, userId, type, message, emailSent]
+  );
+
+  return { id, message, emailSent };
+};

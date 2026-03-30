@@ -1,200 +1,148 @@
 import { pool } from '../app.js';
 import crypto from 'crypto';
+import { createInvoiceNotification } from './notificationService.js';
+import { addDays, addMonths, addYears } from 'date-fns';
 
-export const getAllSubscriptions = async (userId, filters = {}) => {
-  const { status, region, bankName } = filters;
-  
-  let query = 'SELECT * FROM subscriptions WHERE user_id = ?';
-  const params = [userId];
+/**
+ * Process a new invoice: creates/updates subscription, saves invoice and items.
+ */
+export const processInvoice = async (userId, data) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (status) {
-    query += ' AND status = ?';
-    params.push(status);
-  }
-  if (region) {
-    query += ' AND region = ?';
-    params.push(region);
-  }
-  if (bankName) {
-    query += ' AND bank_name LIKE ?';
-    params.push(`%${bankName}%`);
-  }
+    const { 
+      serviceName, category, period, subtotal, discount, amount_due, 
+      currency, issue_date, due_date, invoice_id_number, sender_address, 
+      client_address, subject, po_number, payment_method, card_last4, 
+      bank_name, notes, items 
+    } = data;
 
-  query += ' ORDER BY validity_date ASC';
+    // 1. Check for existing subscription for this service
+    let [subs] = await connection.execute(
+      'SELECT id FROM subscriptions WHERE user_id = ? AND service_name = ?',
+      [userId, serviceName]
+    );
 
-  const [rows] = await pool.execute(query, params);
-  
-  // Map snake_case to camelCase for the frontend if needed
-  return rows.map(row => ({
-    id: row.id,
-    userId: row.user_id,
-    serviceName: row.service_name,
-    invoiceId: row.invoice_id,
-    subject: row.subject,
-    category: row.category,
-    period: row.period,
-    priceINR: row.price_inr,
-    priceAED: row.price_aed,
-    subtotal: row.subtotal,
-    discount: row.discount,
-    amountDue: row.amount_due,
-    totalYearly: row.total_yearly,
-    validityDate: row.validity_date,
-    issueDate: row.issue_date,
-    dueDate: row.due_date,
-    poNumber: row.po_number,
-    paymentMethod: row.payment_method,
-    cardLast4: row.card_last4,
-    bankName: row.bank_name,
-    region: row.region,
-    status: row.status,
-    notes: row.notes,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }));
-};
-
-export const getSubscriptionById = async (id, userId) => {
-  const [rows] = await pool.execute(
-    'SELECT * FROM subscriptions WHERE id = ? AND user_id = ?',
-    [id, userId]
-  );
-  
-  if (rows.length === 0) {
-    throw new Error('Subscription not found');
-  }
-  
-  const row = rows[0];
-  return {
-    id: row.id,
-    userId: row.user_id,
-    serviceName: row.service_name,
-    invoiceId: row.invoice_id,
-    subject: row.subject,
-    category: row.category,
-    period: row.period,
-    priceINR: row.price_inr,
-    priceAED: row.price_aed,
-    subtotal: row.subtotal,
-    discount: row.discount,
-    amountDue: row.amount_due,
-    totalYearly: row.total_yearly,
-    validityDate: row.validity_date,
-    issueDate: row.issue_date,
-    dueDate: row.due_date,
-    poNumber: row.po_number,
-    paymentMethod: row.payment_method,
-    cardLast4: row.card_last4,
-    bankName: row.bank_name,
-    region: row.region,
-    status: row.status,
-    notes: row.notes,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-};
-
-export const createSubscription = async (userId, data) => {
-  const priceINR = parseFloat(data.priceINR);
-  let totalYearly = 0;
-  
-  if (data.period === 'monthly') totalYearly = priceINR * 12;
-  else if (data.period === 'quarterly') totalYearly = priceINR * 4;
-  else if (data.period === 'yearly') totalYearly = priceINR;
-
-  const id = crypto.randomUUID();
-  const validityDate = new Date(data.validityDate);
-
-  await pool.execute(
-    `INSERT INTO subscriptions (
-      id, user_id, service_name, invoice_id, subject, category, period, 
-      price_inr, price_aed, subtotal, discount, amount_due, total_yearly, 
-      validity_date, issue_date, due_date, po_number, payment_method, 
-      card_last4, bank_name, region, status, notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id, userId, data.serviceName, data.invoiceId, data.subject, 
-      data.category || 'General', data.period,
-      data.priceINR, data.priceAED, data.subtotal, data.discount, data.amountDue, 
-      totalYearly, validityDate, data.issueDate ? new Date(data.issueDate) : null, 
-      data.dueDate ? new Date(data.dueDate) : null, data.poNumber,
-      data.paymentMethod, data.cardLast4, data.bankName, data.region,
-      data.status || 'active', data.notes
-    ]
-  );
-
-  return { ...data, id, userId, totalYearly };
-};
-
-export const updateSubscription = async (id, userId, data) => {
-  const subscription = await getSubscriptionById(id, userId);
-
-  let updateData = { ...data };
-  
-  if (data.priceINR || data.period) {
-    const priceINR = data.priceINR ? parseFloat(data.priceINR) : parseFloat(subscription.priceINR);
-    const period = data.period || subscription.period;
+    let subscriptionId;
+    const issueDate = new Date(issue_date);
     
-    let totalYearly = 0;
-    if (period === 'monthly') totalYearly = priceINR * 12;
-    else if (period === 'quarterly') totalYearly = priceINR * 4;
-    else if (period === 'yearly') totalYearly = priceINR;
-    
-    updateData.totalYearly = totalYearly;
-  }
+    // Calculate next billing date based on period
+    let nextBillingDate = new Date(issueDate);
+    if (period === 'monthly') nextBillingDate = addMonths(nextBillingDate, 1);
+    else if (period === 'quarterly') nextBillingDate = addMonths(nextBillingDate, 3);
+    else if (period === 'yearly') nextBillingDate = addYears(nextBillingDate, 1);
 
-  const fields = [];
-  const params = [];
-  
-  // Map camelCase to snake_case and build query
-  const mappings = {
-    serviceName: 'service_name',
-    invoiceId: 'invoice_id',
-    subject: 'subject',
-    category: 'category',
-    period: 'period',
-    priceINR: 'price_inr',
-    priceAED: 'price_aed',
-    subtotal: 'subtotal',
-    discount: 'discount',
-    amountDue: 'amount_due',
-    totalYearly: 'total_yearly',
-    validityDate: 'validity_date',
-    issueDate: 'issue_date',
-    dueDate: 'due_date',
-    poNumber: 'po_number',
-    paymentMethod: 'payment_method',
-    cardLast4: 'card_last4',
-    bankName: 'bank_name',
-    region: 'region',
-    status: 'status',
-    notes: 'notes'
-  };
+    if (subs.length > 0) {
+      subscriptionId = subs[0].id;
+      // Update existing subscription master
+      await connection.execute(
+        'UPDATE subscriptions SET category = ?, period = ?, last_invoice_date = ?, next_billing_date = ?, status = "active" WHERE id = ?',
+        [category || 'General', period, issueDate, nextBillingDate, subscriptionId]
+      );
+    } else {
+      // Create new subscription master
+      subscriptionId = crypto.randomUUID();
+      await connection.execute(
+        `INSERT INTO subscriptions (id, user_id, service_name, category, period, status, last_invoice_date, next_billing_date, region) 
+         VALUES (?, ?, ?, ?, ?, "active", ?, ?, ?)`,
+        [subscriptionId, userId, serviceName, category || 'General', period, issueDate, nextBillingDate, data.region || 'India']
+      );
+    }
 
-  for (const [key, val] of Object.entries(updateData)) {
-    if (mappings[key]) {
-      fields.push(`${mappings[key]} = ?`);
-      if (['validityDate', 'issueDate', 'dueDate'].includes(key) && val) {
-        params.push(new Date(val));
-      } else {
-        params.push(val);
+    // 2. Create Invoice
+    const invoiceId = crypto.randomUUID();
+    await connection.execute(
+      `INSERT INTO invoices (
+        id, user_id, subscription_id, invoice_id_number, sender_address, client_address, 
+        subject, issue_date, due_date, po_number, subtotal, discount, amount_due, 
+        currency, payment_method, card_last4, bank_name, notes, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed')`,
+      [
+        invoiceId, userId, subscriptionId, invoice_id_number, sender_address, client_address, 
+        subject, issueDate, due_date ? new Date(due_date) : null, po_number, 
+        subtotal, discount || 0, amount_due, currency || 'INR', 
+        payment_method, card_last4, bank_name, notes
+      ]
+    );
+
+    // 3. Create Invoice Items
+    if (items && Array.isArray(items)) {
+      for (const item of items) {
+        const itemId = crypto.randomUUID();
+        await connection.execute(
+          'INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount) VALUES (?, ?, ?, ?, ?, ?)',
+          [itemId, invoiceId, item.description, item.quantity || 1, item.unitPrice, item.amount]
+        );
       }
     }
-  }
 
-  if (fields.length > 0) {
-    params.push(id);
-    await pool.execute(
-      `UPDATE subscriptions SET ${fields.join(', ')} WHERE id = ?`,
-      params
-    );
-  }
+    await connection.commit();
 
-  return await getSubscriptionById(id, userId);
+    // 4. Trigger Notification
+    await createInvoiceNotification(userId, {
+      serviceName,
+      invoiceId: invoice_id_number || 'New Invoice',
+      amountDue: amount_due,
+      currency: currency || 'INR',
+      status: 'Processed'
+    });
+
+    return { subscriptionId, invoiceId };
+
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
-export const deleteSubscription = async (id, userId) => {
-  await getSubscriptionById(id, userId);
-  await pool.execute('DELETE FROM subscriptions WHERE id = ?', [id]);
+export const getAllInvoices = async (userId) => {
+  const [rows] = await pool.execute(
+    `SELECT i.*, s.service_name, s.category 
+     FROM invoices i 
+     LEFT JOIN subscriptions s ON i.subscription_id = s.id 
+     WHERE i.user_id = ? 
+     ORDER BY i.issue_date DESC`,
+    [userId]
+  );
+  return rows;
+};
+
+export const getInvoiceDetails = async (invoiceId, userId) => {
+  const [invoiceRows] = await pool.execute(
+    'SELECT * FROM invoices WHERE id = ? AND user_id = ?',
+    [invoiceId, userId]
+  );
+
+  if (invoiceRows.length === 0) return null;
+
+  const [itemRows] = await pool.execute(
+    'SELECT * FROM invoice_items WHERE invoice_id = ?',
+    [invoiceId]
+  );
+
+  return {
+    ...invoiceRows[0],
+    items: itemRows
+  };
+};
+
+export const deleteInvoice = async (invoiceId, userId) => {
+  await pool.execute('DELETE FROM invoices WHERE id = ? AND user_id = ?', [invoiceId, userId]);
   return true;
+};
+
+// Compatibility shim for existing frontend code if needed
+export const getAllSubscriptions = async (userId) => {
+  const [rows] = await pool.execute(
+    `SELECT s.*, i.amount_due as price_inr, i.invoice_id_number as invoice_id 
+     FROM subscriptions s 
+     LEFT JOIN invoices i ON s.id = i.subscription_id 
+     WHERE s.user_id = ? 
+     AND (i.id IS NULL OR i.issue_date = (SELECT MAX(issue_date) FROM invoices WHERE subscription_id = s.id))`,
+    [userId]
+  );
+  return rows;
 };

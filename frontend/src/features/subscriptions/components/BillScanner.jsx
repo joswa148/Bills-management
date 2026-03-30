@@ -106,6 +106,38 @@ export default function BillScanner({ onScanSuccess }) {
                 <p className="text-lg font-bold text-secondary-800">AI Bill Scanner</p>
                 <p className="text-secondary-500 text-sm">Drag & drop your bill image or PDF here</p>
                 <p className="text-secondary-400 text-xs mt-1">Supports Netflix, AWS, Google, Spotify and more</p>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  className="mt-2 text-primary-600 font-bold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Manually trigger a mock success with Harvest data for demo
+                    onScanSuccess({
+                      serviceName: 'Harvest Services',
+                      senderAddress: 'Harvest Inc.\n123 Creative Way\nSan Francisco, CA 94103\nUSA',
+                      clientAddress: 'Joswa Solutions\n456 Tech Park\nBangalore, KA 560001\nIndia',
+                      invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
+                      subject: 'Monthly Web Development & Consulting',
+                      category: 'Software',
+                      items: [
+                        { description: 'Web Development (Senior Developer)', quantity: 40, unitPrice: 25, amount: 1000 },
+                        { description: 'Project Management & Consulting', quantity: 5, unitPrice: 50, amount: 250 }
+                      ],
+                      subtotal: 1250,
+                      discount: 312.50,
+                      amountDue: 937.50,
+                      currency: 'INR',
+                      poNumber: 'PO-' + Math.floor(Math.random() * 9000),
+                      bankName: 'HDFC Bank',
+                      paymentMethod: 'Bank Transfer',
+                      notes: 'Thank you for your business. Please pay within 30 days.'
+                    });
+                    setSuccess(true);
+                  }}
+                >
+                  Try Demo Invoice
+                </Button>
               </div>
             </div>
           )}

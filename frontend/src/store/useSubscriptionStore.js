@@ -19,12 +19,11 @@ export const useSubscriptionStore = create((set, get) => ({
   addSubscription: async (subscription) => {
     set({ isLoading: true });
     try {
-      const newSub = await billsApi.createBill(subscription);
-      set((state) => ({ 
-        subscriptions: [newSub, ...state.subscriptions],
-        isLoading: false 
-      }));
-      return newSub;
+      const result = await billsApi.createBill(subscription);
+      // Since it returns IDs, we should re-fetch to get the full view
+      await get().fetchSubscriptions();
+      set({ isLoading: false });
+      return result;
     } catch (error) {
       set({ error: error.message, isLoading: false });
       throw error;

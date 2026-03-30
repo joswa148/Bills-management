@@ -5,13 +5,21 @@ export const billsApi = {
     const response = await axios.get('/subscriptions');
     return response.data.data;
   },
+  getInvoices: async () => {
+    const response = await axios.get('/subscriptions/invoices');
+    return response.data.data;
+  },
+  getInvoice: async (id) => {
+    const response = await axios.get(`/subscriptions/invoices/${id}`);
+    return response.data.data;
+  },
   getBill: async (id) => {
     const response = await axios.get(`/subscriptions/${id}`);
     return response.data.data;
   },
   createBill: async (bill) => {
     const response = await axios.post('/subscriptions', bill);
-    return response.data.data;
+    return response.data.data; // Now returns { subscriptionId, invoiceId }
   },
   updateBill: async (id, data) => {
     const response = await axios.put(`/subscriptions/${id}`, data);
