@@ -37,30 +37,22 @@ export const extractSubscriptionData = async (filePath) => {
     notes: ''
   };
 
+  // --- Helper to clean name from filename ---
+  const cleanNameFromFileName = (name) => {
+    // Remove extension, underscores, and common keywords
+    let clean = name
+      .replace(/\.(pdf|jpeg|jpg|png)$/i, '') // Remove extensions
+      .replace(/[-_]/g, ' ') // Replace - and _ with space
+      .replace(/(invoice|bill|receipt|statement|scan)/gi, '') // Remove keywords
+      .trim();
+    
+    // Capitalize first letters
+    return clean ? clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'New Service';
+  };
+
   // Logic to return more realistic mocks based on filename keywords
-  if (fileName.includes('harvest') || fileName.includes('invoice') || fileName.includes('bill') || fileName.includes('receipt') || fileName.includes('statement')) {
-    extractedData = {
-      ...extractedData,
-      serviceName: 'Harvest Services',
-      senderAddress: 'Harvest Inc.\n123 Creative Way\nSan Francisco, CA 94103\nUSA',
-      clientAddress: 'Joswa Solutions\n456 Tech Park\nBangalore, KA 560001\nIndia',
-      invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
-      subject: 'Monthly Web Development & Consulting',
-      category: 'Software',
-      items: [
-        { description: 'Web Development (Senior Developer)', quantity: 40, unitPrice: 25, amount: 1000 },
-        { description: 'Project Management & Consulting', quantity: 5, unitPrice: 50, amount: 250 }
-      ],
-      subtotal: 1250,
-      discount: 312.50, // 25% of 1250 as requested in template
-      amountDue: 937.50,
-      currency: 'INR',
-      poNumber: 'PO-' + Math.floor(Math.random() * 9000),
-      bankName: 'HDFC Bank',
-      paymentMethod: 'Bank Transfer',
-      notes: 'Thank you for your business. Please pay within 30 days.'
-    };
-  } else if (fileName.includes('netflix')) {
+  // --- Check specific services FIRST ---
+  if (fileName.includes('netflix')) {
     extractedData = {
       ...extractedData,
       serviceName: 'Netflix',
@@ -125,6 +117,51 @@ export const extractSubscriptionData = async (filePath) => {
       bankName: 'SBI',
       cardLast4: '3456'
     };
+  } else if (fileName.includes('harvest')) {
+    extractedData = {
+      ...extractedData,
+      serviceName: 'Harvest Services',
+      senderAddress: 'Harvest Inc.\n123 Creative Way\nSan Francisco, CA 94103\nUSA',
+      clientAddress: 'Joswa Solutions\n456 Tech Park\nBangalore, KA 560001\nIndia',
+      invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
+      subject: 'Monthly Web Development & Consulting',
+      category: 'Software',
+      items: [
+        { description: 'Web Development (Senior Developer)', quantity: 40, unitPrice: 25, amount: 1000 },
+        { description: 'Project Management & Consulting', quantity: 5, unitPrice: 50, amount: 250 }
+      ],
+      subtotal: 1250,
+      discount: 312.50, // 25% of 1250 as requested in template
+      amountDue: 937.50,
+      currency: 'INR',
+      poNumber: 'PO-' + Math.floor(Math.random() * 9000),
+      bankName: 'HDFC Bank',
+      paymentMethod: 'Bank Transfer',
+      notes: 'Thank you for your business. Please pay within 30 days.'
+    };
+  } else if (fileName.includes('invoice') || fileName.includes('bill') || fileName.includes('receipt') || fileName.includes('statement')) {
+    // Dynamic extraction for generic bills
+    const dynamicName = cleanNameFromFileName(fileName);
+    extractedData = {
+      ...extractedData,
+      serviceName: dynamicName,
+      invoiceId: 'DYN-' + Math.floor(Math.random() * 100000),
+      amountDue: Math.floor(Math.random() * 5000) + 500, // Random plausible amount
+      currency: 'INR',
+      category: fileName.includes('elec') ? 'Utilities' : 'General'
+    };
+    extractedData.subtotal = extractedData.amountDue;
+  } else if (fileName.includes('document') || fileName.includes('scan') || fileName.includes('pdf') || fileName.includes('jpg') || fileName.includes('png')) {
+    // Catch-all for other document types
+    const dynamicName = cleanNameFromFileName(fileName);
+    extractedData = {
+      ...extractedData,
+      serviceName: dynamicName || 'New Subscription',
+      invoiceId: 'DOC-' + Math.floor(Math.random() * 100000),
+      amountDue: Math.floor(Math.random() * 2000) + 100,
+      currency: 'INR'
+    };
+    extractedData.subtotal = extractedData.amountDue;
   }
 
   return extractedData;
