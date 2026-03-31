@@ -8,7 +8,9 @@ export const register = async (userData) => {
 
   const [existingUsers] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
   if (existingUsers.length > 0) {
-    throw new Error('User already exists');
+    const error = new Error('User already exists');
+    error.statusCode = 400;
+    throw error;
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -36,12 +38,16 @@ export const login = async (email, password) => {
   const user = users[0];
 
   if (!user) {
-    throw new Error('Invalid credentials');
+    const error = new Error('Invalid credentials');
+    error.statusCode = 401;
+    throw error;
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
   if (!isPasswordValid) {
-    throw new Error('Invalid credentials');
+    const error = new Error('Invalid credentials');
+    error.statusCode = 401;
+    throw error;
   }
 
   const token = jwt.sign(

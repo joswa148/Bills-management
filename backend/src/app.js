@@ -28,10 +28,17 @@ app.use('/api/v1/notifications', notificationRoutes);
 
 // Error Handling Middleware
 app.use((err, req, res, _next) => {
-  console.error(err.stack);
-  res.status(500).json({
+  console.error(`[Error] ${err.message}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(err.stack);
+  }
+
+  const statusCode = err.statusCode || err.status || 500;
+  res.status(statusCode).json({
     status: 'error',
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+    message: statusCode === 500 && process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : err.message
   });
 });
 
