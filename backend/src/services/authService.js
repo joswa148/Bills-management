@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool } from '../app.js';
+import { pool } from '../config/database.js';
 import crypto from 'crypto';
 
 export const register = async (userData) => {

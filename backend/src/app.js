@@ -8,17 +8,11 @@ import authRoutes from './routes/authRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import { pool } from './config/database.js';
 
 dotenv.config();
 
 const app = express();
-
-const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
 
 // Middleware
 app.use(helmet());
@@ -41,4 +35,4 @@ app.use((err, req, res, _next) => {
   });
 });
 
-export { app, pool };
+export { app };

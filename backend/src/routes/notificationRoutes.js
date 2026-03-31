@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/', protect, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const notifications = await getUserNotifications(req.user.id);
     res.json(notifications);
@@ -18,7 +18,7 @@ router.get('/', protect, async (req, res) => {
 
 router.put('/:id/read', notificationController.markRead);
 
-router.post('/check', protect, async (req, res) => {
+router.post('/check', async (req, res) => {
   try {
     // Only admins should ideally trigger this, but for now we allow anyone for testing
     const notifications = await checkAndCreateNotifications();

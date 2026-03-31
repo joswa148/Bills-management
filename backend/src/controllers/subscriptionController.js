@@ -75,7 +75,7 @@ export const listInvoices = async (req, res, next) => {
   }
 };
 
-export const getInvoice = async (req, res, next) => {
+export const getSubscription = async (req, res, next) => {
   try {
     const invoice = await subscriptionService.getInvoiceDetails(req.params.id, req.user.id);
     if (!invoice) return res.status(404).json({ status: 'error', message: 'Invoice not found' });

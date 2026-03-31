@@ -1,4 +1,4 @@
-import { pool } from '../app.js';
+import { pool } from '../config/database.js';
 import crypto from 'crypto';
 import { createInvoiceNotification } from './notificationService.js';
 import { addDays, addMonths, addYears } from 'date-fns';

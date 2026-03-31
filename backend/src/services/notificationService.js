@@ -1,7 +1,7 @@
-import { pool } from '../app.js';
+import { pool } from '../config/database.js';
 import { differenceInDays } from 'date-fns';
 import crypto from 'crypto';
-import { sendExpiryAlert } from './emailService.js';
+import { sendExpiryAlert, sendInvoiceConfirmation } from './emailService.js';
 
 export const checkAndCreateNotifications = async () => {
   const today = new Date();
@@ -18,7 +18,8 @@ export const checkAndCreateNotifications = async () => {
   const notifications = [];
 
   for (const sub of subscriptions) {
-    const daysLeft = differenceInDays(new Date(sub.validity_date), new Date());
+    // FIX: use next_billing_date instead of validity_date to match schema
+    const daysLeft = differenceInDays(new Date(sub.next_billing_date), new Date());
     
     // Create notification if due in 7, 3, or 1 days
     if (daysLeft >= 0 && (daysLeft === 7 || daysLeft === 3 || daysLeft === 1)) {
