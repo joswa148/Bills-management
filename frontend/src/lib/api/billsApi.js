@@ -10,7 +10,7 @@ export const billsApi = {
     return response.data.data;
   },
   getInvoice: async (id) => {
-    const response = await axios.get(`/subscriptions/invoices/${id}`);
+    const response = await axios.get(`/subscriptions/${id}`);
     return response.data.data;
   },
   getBill: async (id) => {
