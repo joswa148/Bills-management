@@ -15,8 +15,21 @@ export const processInvoice = async (userId, data) => {
       serviceName, category, period, subtotal, discount, amount_due, 
       currency, issue_date, due_date, invoice_id_number, sender_address, 
       client_address, subject, po_number, payment_method, card_last4, 
-      bank_name, notes, items 
+      bank_name, notes, items, _fileHash, _meta
     } = data;
+
+    // 0. Check for duplicate invoice_id_number (same vendor invoice scanned twice)
+    let isDuplicateInvoiceId = false;
+    if (invoice_id_number) {
+      const [existingInv] = await connection.execute(
+        'SELECT id FROM invoices WHERE user_id = ? AND invoice_id_number = ?',
+        [userId, invoice_id_number]
+      );
+      if (existingInv.length > 0) {
+        isDuplicateInvoiceId = true;
+        console.warn(`[Invoice] Duplicate invoice_id_number detected: ${invoice_id_number} for user ${userId}`);
+      }
+    }
 
     // 1. Check for existing subscription for this service
     let [subs] = await connection.execute(
@@ -56,13 +69,15 @@ export const processInvoice = async (userId, data) => {
       `INSERT INTO invoices (
         id, user_id, subscription_id, invoice_id_number, sender_address, client_address, 
         subject, issue_date, due_date, po_number, subtotal, discount, amount_due, 
-        currency, payment_method, card_last4, bank_name, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed')`,
+        currency, payment_method, card_last4, bank_name, notes, status, file_hash, scan_confidence
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed', ?, ?)`,
       [
         invoiceId, userId, subscriptionId, invoice_id_number, sender_address, client_address, 
         subject, issueDate, due_date ? new Date(due_date) : null, po_number, 
         subtotal, discount || 0, amount_due, currency || 'INR', 
-        payment_method, card_last4, bank_name, notes
+        payment_method, card_last4, bank_name, notes,
+        _fileHash || null,
+        _meta?.overallConfidence || null
       ]
     );
 
@@ -88,7 +103,7 @@ export const processInvoice = async (userId, data) => {
       status: 'Processed'
     });
 
-    return { subscriptionId, invoiceId };
+    return { subscriptionId, invoiceId, isDuplicateInvoiceId };
 
   } catch (error) {
     await connection.rollback();
@@ -145,4 +160,47 @@ export const getAllSubscriptions = async (userId) => {
     [userId]
   );
   return rows;
+};
+
+/**
+ * Duplicate detection — checks if this exact file was already scanned
+ * by looking up the SHA-256 hash in the invoices table.
+ */
+export const checkDuplicateFileHash = async (userId, fileHash) => {
+  if (!fileHash) return null;
+  const [rows] = await pool.execute(
+    `SELECT i.id, i.invoice_id_number, i.amount_due, i.created_at, s.service_name
+     FROM invoices i
+     LEFT JOIN subscriptions s ON i.subscription_id = s.id
+     WHERE i.user_id = ? AND i.file_hash = ?
+     LIMIT 1`,
+    [userId, fileHash]
+  );
+  return rows.length > 0 ? rows[0] : null;
+};
+
+/**
+ * Vendor Normalization — maps OCR names to canonical names
+ */
+export const getCanonicalVendorName = async (rawName) => {
+  if (!rawName) return rawName;
+  const [rows] = await pool.execute(
+    'SELECT canonical_name FROM vendor_mappings WHERE raw_name = ? LIMIT 1',
+    [rawName]
+  );
+  return rows.length > 0 ? rows[0].canonical_name : rawName;
+};
+
+export const addVendorMapping = async (rawName, canonicalName) => {
+  if (!rawName || !canonicalName) return false;
+  // If the user hasn't changed it, don't create a useless mapping
+  if (rawName === canonicalName) return false;
+  
+  const mappingId = crypto.randomUUID();
+  // INSERT IGNORE ensures we don't crash on duplicate raw_names
+  await pool.execute(
+    'INSERT IGNORE INTO vendor_mappings (id, raw_name, canonical_name) VALUES (?, ?, ?)',
+    [mappingId, rawName, canonicalName]
+  );
+  return true;
 };

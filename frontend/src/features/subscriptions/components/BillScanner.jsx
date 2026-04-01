@@ -8,57 +8,92 @@ import { billsApi } from '../../../lib/api/billsApi';
 const { Dragger } = Upload;
 
 export default function BillScanner({ onScanSuccess }) {
-  const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [loading, setLoading]       = useState(false);
+  const [scanning, setScanning]     = useState(false);
+  const [success, setSuccess]       = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
+  const [confidence, setConfidence] = useState(null); // overallConfidence 0-1
+  const [progress, setProgress]     = useState(0);
 
   const handleUpload = async (options) => {
     const { file, onSuccess, onError } = options;
     setLoading(true);
     setSuccess(false);
+    setIsDuplicate(false);
+    setDuplicateInfo(null);
+    setConfidence(null);
     setProgress(10);
 
     const formData = new FormData();
     formData.append('bill', file);
 
     try {
-      // Step 1: Uploading
       setProgress(30);
-      
       const data = await billsApi.scanBill(formData);
 
-      // Step 2: Scanning Animation
-      setProgress(70);
+      // ── Duplicate file detected ──────────────────────────────────────────
+      if (data.isDuplicate) {
+        setIsDuplicate(true);
+        setDuplicateInfo(data.duplicateInfo);
+        setLoading(false);
+        setProgress(0);
+        toast('This invoice was already scanned.', { icon: '⚠️' });
+        onSuccess('OK');
+        return;
+      }
+
+      // ── Step 2: Poll async job status ───────────────────────────────────
+      setProgress(50);
       setScanning(true);
       
-      // Artificial delay for the "AI Analysis" animation
-      let p = 70;
-      const interval = setInterval(() => {
-        p += 2;
-        setProgress(p);
-        if (p >= 95) clearInterval(interval);
-      }, 100);
+      const jobId = data.jobId;
+      let currentProgress = 50;
 
-      setTimeout(() => {
-        clearInterval(interval);
-        setScanning(false);
-        setProgress(100);
-        setSuccess(true);
-        setLoading(false);
-        toast.success('Bill scanned successfully!');
-        
-        if (onScanSuccess) {
-          onScanSuccess(data.extractedData);
+      const pollStatus = async () => {
+        try {
+          const res = await billsApi.getScanStatus(jobId);
+          if (res.status === 'completed') {
+            setProgress(100);
+            setScanning(false);
+            setSuccess(true);
+            setLoading(false);
+
+            if (res.extractedData && res.extractedData._meta) {
+              setConfidence(res.extractedData._meta.overallConfidence);
+            }
+
+            toast.success('Bill scanned successfully!');
+            if (onScanSuccess) {
+              const documentUrl = URL.createObjectURL(file);
+              onScanSuccess(res.extractedData, documentUrl);
+            }
+            onSuccess('OK');
+          } else if (res.status === 'failed') {
+            throw new Error(res.error || 'Scan failed during background processing.');
+          } else {
+            // Still pending or processing
+            currentProgress = Math.min(95, currentProgress + 3);
+            setProgress(currentProgress);
+            setTimeout(pollStatus, 1500); // Poll every 1.5 seconds
+          }
+        } catch (error) {
+          setLoading(false);
+          setScanning(false);
+          setProgress(0);
+          toast.error(error.message || 'Error checking scan status. Please try again.');
+          onError(error);
         }
-        onSuccess("OK");
-      }, 3000);
+      };
+
+      // Start polling loop
+      setTimeout(pollStatus, 1000);
 
     } catch (error) {
       setLoading(false);
       setScanning(false);
       setProgress(0);
-      toast.error(error.response?.data?.message || 'Failed to scan bill');
+      toast.error(error.response?.data?.message || 'Failed to scan bill. Check file format.');
       onError(error);
     }
   };
@@ -86,13 +121,43 @@ export default function BillScanner({ onScanSuccess }) {
                 <Progress percent={progress} size="small" strokeColor="#3b82f6" className="w-48" />
               </div>
             </div>
+          ) : isDuplicate ? (
+            <div className="flex flex-col items-center justify-center space-y-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
+              <span className="text-4xl">⚠️</span>
+              <div className="text-center w-full">
+                <p className="text-lg font-bold text-amber-800">Duplicate Bill Detected</p>
+                <p className="text-amber-700 text-sm mt-1">
+                  This exact file was already scanned on {duplicateInfo?.scannedAt ? new Date(duplicateInfo.scannedAt).toLocaleDateString() : 'a previous date'}.
+                </p>
+                <div className="mt-3 text-sm bg-white text-left p-3 rounded-lg border border-amber-100 shadow-sm">
+                  <p className="mb-1"><span className="font-semibold text-secondary-500">Service:</span> {duplicateInfo?.serviceName}</p>
+                  <p className="mb-1"><span className="font-semibold text-secondary-500">Invoice ID:</span> {duplicateInfo?.invoiceIdNumber}</p>
+                  <p><span className="font-semibold text-secondary-500">Amount Due:</span> {duplicateInfo?.amountDue}</p>
+                </div>
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); setIsDuplicate(false); setSuccess(false); }} 
+                  className="mt-4 bg-white border-amber-300 text-amber-700 font-bold hover:text-amber-800 hover:border-amber-400"
+                >
+                  Scan a different bill
+                </Button>
+              </div>
+            </div>
           ) : success ? (
             <div className="flex flex-col items-center justify-center space-y-2">
               <CheckCircleFilled style={{ fontSize: 48, color: '#10b981' }} />
               <div className="text-center">
                 <p className="text-lg font-bold text-secondary-800">Scan Complete!</p>
-                <p className="text-secondary-500 text-sm">Data has been filled in the form below.</p>
-                <Button type="link" onClick={(e) => { e.stopPropagation(); setSuccess(false); }} className="p-0 h-auto">
+                {confidence && (
+                  <p className={`text-sm font-semibold mt-1 px-2 py-0.5 rounded-full inline-block ${
+                    confidence >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
+                    confidence >= 0.7 ? 'bg-amber-100 text-amber-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    AI Confidence: {Math.round(confidence * 100)}%
+                  </p>
+                )}
+                <p className="text-secondary-500 text-sm mt-2">Data has been filled in the form below.</p>
+                <Button type="link" onClick={(e) => { e.stopPropagation(); setSuccess(false); }} className="p-0 h-auto mt-1">
                   Scan another bill
                 </Button>
               </div>

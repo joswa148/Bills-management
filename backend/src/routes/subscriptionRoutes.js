@@ -9,6 +9,8 @@ const router = express.Router();
 router.use(protect);
 
 router.post('/scan', scanController.scanBill);
+router.get('/scan/:jobId', scanController.checkScanStatus);
+router.post('/vendors/map', subscriptionController.mapVendorAlias);
 
 router.get('/', subscriptionController.listSubscriptions);
 router.get('/:id', subscriptionController.getSubscription);

@@ -102,3 +102,16 @@ export const removeSubscription = async (req, res, next) => {
     next(error);
   }
 };
+
+export const mapVendorAlias = async (req, res, next) => {
+  try {
+    const { rawName, canonicalName } = req.body;
+    if (!rawName || !canonicalName) {
+      return res.status(400).json({ status: 'error', message: 'rawName and canonicalName required' });
+    }
+    await subscriptionService.addVendorMapping(rawName, canonicalName);
+    res.status(200).json({ status: 'success', message: 'Vendor mapping saved' });
+  } catch (error) {
+    next(error);
+  }
+};

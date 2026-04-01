@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Form, Input, InputNumber, Select, DatePicker, Button, Space, Table, Divider } from 'antd';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { Plus, Trash2, MapPin, Building, List } from 'lucide-react';
@@ -7,6 +7,7 @@ import * as z from 'zod';
 import dayjs from 'dayjs';
 import { toast } from 'react-hot-toast';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
+import { billsApi } from '../../../lib/api/billsApi';
 import BillScanner from './BillScanner';
 
 const schema = z.object({
@@ -40,6 +41,48 @@ const schema = z.object({
 
 export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const { addSubscription, updateSubscription } = useSubscriptionStore();
+
+  // ── Confidence & Split View State (populated after a scan) ───────────────
+  const [fieldConfidence, setFieldConfidence] = useState({});
+  const [scanMeta, setScanMeta] = useState(null);
+  const [documentUrl, setDocumentUrl] = useState(null);
+  const [rawServiceName, setRawServiceName] = useState('');
+
+  const handleClose = () => {
+    setDocumentUrl(null);
+    setRawServiceName('');
+    setScanMeta(null);
+    setFieldConfidence({});
+    reset();
+    onCancel();
+  };
+
+  // Renders a small confidence badge next to a form label
+  const ConfidenceBadge = ({ field }) => {
+    const score = fieldConfidence[field];
+    if (!score) return null;
+    const pct = Math.round(score * 100);
+    const cls = score >= 0.9
+      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+      : score >= 0.7
+      ? 'bg-amber-100 text-amber-700 border-amber-200'
+      : 'bg-red-100 text-red-600 border-red-200';
+    const icon = score >= 0.9 ? '✓' : score >= 0.7 ? '⚠' : '!';
+    return (
+      <span
+        className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cls}`}
+        title={`AI confidence: ${pct}%`}
+      >
+        {icon} {pct}%
+      </span>
+    );
+  };
+
+  // Wraps a label string with an optional confidence badge
+  const fieldLabel = (label, field) => (
+    <span className="flex items-center">{label}<ConfidenceBadge field={field} /></span>
+  );
+
   
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -83,9 +126,15 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     }
   }, [watchItems]); // Only re-run when items change, NOT when discount changes
 
-  const handleScanSuccess = (data) => {
+  const handleScanSuccess = (data, docUrl) => {
     // Set the lock flag so the useEffect does NOT overwrite amounts on this cycle
     scanJustHappened.current = true;
+
+    // Extract per-field confidence scores and scan metadata from OCR response
+    if (data._confidence) setFieldConfidence(data._confidence);
+    if (data._meta)       setScanMeta(data._meta);
+    if (docUrl)           setDocumentUrl(docUrl);
+    setRawServiceName(data.rawServiceName || '');
 
     reset({
       // Service Info
@@ -171,9 +220,13 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       } else {
         await addSubscription(formattedData);
         toast.success(`Invoice for ${data.serviceName} processed successfully`);
+
+        // Feedback loop: If the user changed the vendor name from the raw AI extraction, teach the backend
+        if (rawServiceName && rawServiceName !== formattedData.serviceName) {
+          billsApi.mapVendor(rawServiceName, formattedData.serviceName).catch(err => console.error('Alias mapping failed:', err));
+        }
       }
-      onCancel();
-      reset();
+      handleClose();
     } catch (error) {
       toast.error(error.message || 'Something went wrong');
     }
@@ -183,22 +236,68 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     <Modal
       title={<span className="text-xl font-bold text-secondary-900">{initialValues ? 'Edit Subscription' : 'Add New Subscription'}</span>}
       open={open}
-      onCancel={onCancel}
+      onCancel={handleClose}
       footer={null}
-      width={600}
+      width={documentUrl ? 1100 : 600}
       className="premium-modal"
       centered
+      style={documentUrl ? { top: 20 } : undefined}
     >
-      {!initialValues && <BillScanner onScanSuccess={handleScanSuccess} />}
+      <div className={documentUrl ? "flex gap-6 mt-4 h-[75vh]" : ""}>
+        {/* Left Pane (Document Preview) */}
+        {documentUrl && (
+          <div className="w-1/2 h-full rounded-2xl overflow-hidden border border-secondary-200 bg-secondary-50 relative">
+            <object data={documentUrl} className="w-full h-full absolute inset-0" type="application/pdf">
+              <iframe src={documentUrl} className="w-full h-full" title="Document Preview" />
+            </object>
+          </div>
+        )}
+
+        {/* Right Pane (Form & Scanner) */}
+        <div className={documentUrl ? "w-1/2 h-full overflow-y-auto pr-2 custom-scrollbar" : ""}>
+          {!initialValues && <BillScanner onScanSuccess={handleScanSuccess} />}
+
+          {/* ── Scan Confidence Banner (shown after a successful scan) ────── */}
+      {scanMeta && (
+        <div className={`mb-4 px-4 py-3 rounded-2xl border flex items-center justify-between ${
+          scanMeta.overallConfidence >= 0.9
+            ? 'bg-emerald-50 border-emerald-200'
+            : scanMeta.overallConfidence >= 0.7
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">
+              {scanMeta.overallConfidence >= 0.9 ? '🎯' : scanMeta.overallConfidence >= 0.7 ? '⚠️' : '🔴'}
+            </span>
+            <div>
+              <p className="text-sm font-bold text-secondary-800">
+                AI Confidence: {Math.round(scanMeta.overallConfidence * 100)}% &nbsp;
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  scanMeta.overallConfidence >= 0.9 ? 'bg-emerald-200 text-emerald-800'
+                  : 'bg-amber-200 text-amber-800'
+                }`}>
+                  {scanMeta.overallConfidence >= 0.9 ? 'High Accuracy' : scanMeta.overallConfidence >= 0.7 ? 'Review Marked Fields' : 'Manual Review Needed'}
+                </span>
+              </p>
+              <p className="text-xs text-secondary-500">
+                {scanMeta.fieldsExtracted} fields extracted via <strong>{scanMeta.provider === 'mindee' ? 'Mindee AI' : 'Smart Mock OCR'}</strong>
+                {scanMeta.overallConfidence < 0.9 && ' — fields marked ⚠ need your review'}
+              </p>
+            </div>
+          </div>
+          <button onClick={() => { setScanMeta(null); setFieldConfidence({}); setDocumentUrl(null); }} className="text-secondary-400 hover:text-secondary-600 text-lg leading-none">&times;</button>
+        </div>
+      )}
       
-      <Form layout="vertical" onFinish={handleSubmit(onSubmit)} className="mt-6">
+      <Form layout="vertical" onFinish={handleSubmit(onSubmit)} className={documentUrl ? "mt-4" : "mt-6"}>
         <div className="grid grid-cols-2 gap-x-6">
           <div className="col-span-2 mt-4 mb-2 pb-2 border-b border-secondary-100 flex items-center">
             <span className="w-2 h-2 rounded-full bg-primary-500 mr-2"></span>
             <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Service Details</span>
           </div>
 
-          <Form.Item label="Service Name" validateStatus={errors.serviceName ? 'error' : ''} help={errors.serviceName?.message}>
+          <Form.Item label={fieldLabel('Service Name', 'serviceName')} validateStatus={errors.serviceName ? 'error' : ''} help={errors.serviceName?.message}>
             <Controller
               name="serviceName"
               control={control}
@@ -233,22 +332,22 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Address Details</span>
           </div>
 
-          <Form.Item label="Sender Address (From)" className="col-span-2">
+          <Form.Item label={fieldLabel('Sender Address (From)', 'senderAddress')} className="col-span-2">
             <Controller
               name="senderAddress"
               control={control}
               render={({ field }) => (
-                <Input.TextArea {...field} rows={3} placeholder="Company Name&#10;Address Line 1&#10;City, State, ZIP" className="rounded-xl font-mono text-xs" />
+                <Input.TextArea {...field} rows={3} placeholder={"Company Name\nAddress Line 1\nCity, State, ZIP"} className="rounded-xl font-mono text-xs" />
               )}
             />
           </Form.Item>
 
-          <Form.Item label="Client Address (Invoice For)" className="col-span-2">
+          <Form.Item label={fieldLabel('Client Address (Invoice For)', 'clientAddress')} className="col-span-2">
             <Controller
               name="clientAddress"
               control={control}
               render={({ field }) => (
-                <Input.TextArea {...field} rows={3} placeholder="Client Name&#10;Address Line 1&#10;City, State, ZIP" className="rounded-xl font-mono text-xs" />
+                <Input.TextArea {...field} rows={3} placeholder={"Client Name\nAddress Line 1\nCity, State, ZIP"} className="rounded-xl font-mono text-xs" />
               )}
             />
           </Form.Item>
@@ -258,7 +357,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             <span className="text-sm font-bold text-secondary-700 uppercase tracking-wider">Invoice Identification</span>
           </div>
 
-          <Form.Item label="Invoice ID #" validateStatus={errors.invoiceIdNumber ? 'error' : ''} help={errors.invoiceIdNumber?.message}>
+          <Form.Item label={fieldLabel('Invoice ID #', 'invoiceIdNumber')} validateStatus={errors.invoiceIdNumber ? 'error' : ''} help={errors.invoiceIdNumber?.message}>
             <Controller
               name="invoiceIdNumber"
               control={control}
@@ -274,7 +373,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Issue Date" validateStatus={errors.issueDate ? 'error' : ''} help={errors.issueDate?.message}>
+          <Form.Item label={fieldLabel('Issue Date', 'issueDate')} validateStatus={errors.issueDate ? 'error' : ''} help={errors.issueDate?.message}>
             <Controller
               name="issueDate"
               control={control}
@@ -282,7 +381,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
             />
           </Form.Item>
 
-          <Form.Item label="Due Date" validateStatus={errors.dueDate ? 'error' : ''} help={errors.dueDate?.message}>
+          <Form.Item label={fieldLabel('Due Date', 'dueDate')} validateStatus={errors.dueDate ? 'error' : ''} help={errors.dueDate?.message}>
             <Controller
               name="dueDate"
               control={control}
@@ -488,7 +587,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
         </div>
 
         <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-secondary-50">
-          <Button onClick={onCancel} className="rounded-xl px-6 h-11 font-bold text-secondary-500 hover:text-secondary-700">
+          <Button onClick={handleClose} className="rounded-xl px-6 h-11 font-bold text-secondary-500 hover:text-secondary-700">
             Cancel
           </Button>
           <Button type="primary" htmlType="submit" className="rounded-xl px-8 h-11 bg-primary-600 font-bold shadow-lg shadow-primary-500/20">
@@ -497,13 +596,16 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
         </div>
       </Form>
       
+      </div> {/* Close right pane wrapper */}
+      </div> {/* Close split-view outer wrapper */}
+      
       <style>{`
         .premium-select .ant-select-selector {
           border-radius: 0.75rem !important;
           padding: 4px 12px !important;
           height: 44px !important;
           display: flex !important;
-          items-center !important;
+          align-items: center !important;
         }
         .premium-modal .ant-modal-content {
           border-radius: 2rem;

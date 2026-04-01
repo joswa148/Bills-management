@@ -35,6 +35,14 @@ export const billsApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data.data; // Now returns { jobId, status: 'pending', ... }
+  },
+  getScanStatus: async (jobId) => {
+    const response = await axios.get(`/subscriptions/scan/${jobId}`);
     return response.data.data;
+  },
+  mapVendor: async (rawName, canonicalName) => {
+    const response = await axios.post('/subscriptions/vendors/map', { rawName, canonicalName });
+    return response.data;
   }
 };
