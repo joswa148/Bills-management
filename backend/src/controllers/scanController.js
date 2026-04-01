@@ -84,15 +84,20 @@ export const checkScanStatus = async (req, res, next) => {
     const { jobId } = req.params;
     const job = await getJobStatus(jobId, req.user.id);
     
-    if (!job) {
-      return res.status(404).json({ status: 'error', message: 'Job not found' });
+    let extractedData = job.result_data;
+    if (typeof extractedData === 'string') {
+      try {
+        extractedData = JSON.parse(extractedData);
+      } catch (e) {
+        console.error('[Scan] Failed to parse result_data:', e);
+      }
     }
 
     return res.status(200).json({
       status: 'success',
       data: {
         status: job.status,
-        extractedData: job.result_data || null,
+        extractedData: extractedData || null,
         error: job.error_message || null
       }
     });

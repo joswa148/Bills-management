@@ -199,8 +199,10 @@ const extractWithMock = async (filePath) => {
     const randomAmount = Math.floor(Math.random() * 4000) + 1000;
     const extractedName = path.basename(filePath, path.extname(filePath))
       .replace(/[-_]/g, ' ')
-      .replace(/\d{10,}/g, '')
-      .replace(/(invoice|bill|receipt|statement|scan|document|copy)/gi, '')
+      .replace(/\d{4}-\d{2}-\d{2}/g, '') // remove ISO dates
+      .replace(/\d{2}\.\d{2}\.\d{4}/g, '') // remove dot dates
+      .replace(/(invoice|inv|bill|receipt|statement|scan|document|copy|aed|inr|usd)/gi, '')
+      .replace(/\d{5,}/g, '') // remove long numbers
       .trim().split(' ').filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ') || 'New Service';
