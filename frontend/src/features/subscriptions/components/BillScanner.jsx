@@ -112,14 +112,17 @@ export default function BillScanner({ onScanSuccess }) {
                   className="mt-2 text-primary-600 font-bold"
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Manually trigger a mock success with Harvest data for demo
+                    const randomInvNum = Math.floor(Math.random() * 90000) + 10000;
+                    const today = new Date().toISOString().split('T')[0];
+                    const due = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
                     onScanSuccess({
                       serviceName: 'Harvest Services',
+                      category: 'Software',
+                      period: 'monthly',
+                      invoiceId: `INV-${randomInvNum}`,
+                      subject: 'Monthly Web Development & Consulting',
                       senderAddress: 'Harvest Inc.\n123 Creative Way\nSan Francisco, CA 94103\nUSA',
                       clientAddress: 'Joswa Solutions\n456 Tech Park\nBangalore, KA 560001\nIndia',
-                      invoiceId: 'INV-' + Math.floor(Math.random() * 100000),
-                      subject: 'Monthly Web Development & Consulting',
-                      category: 'Software',
                       items: [
                         { description: 'Web Development (Senior Developer)', quantity: 40, unitPrice: 25, amount: 1000 },
                         { description: 'Project Management & Consulting', quantity: 5, unitPrice: 50, amount: 250 }
@@ -128,15 +131,20 @@ export default function BillScanner({ onScanSuccess }) {
                       discount: 312.50,
                       amountDue: 937.50,
                       currency: 'INR',
-                      poNumber: 'PO-' + Math.floor(Math.random() * 9000),
-                      bankName: 'HDFC Bank',
+                      issueDate: today,
+                      dueDate: due,
+                      poNumber: `PO-${Math.floor(Math.random() * 9000) + 1000}`,
                       paymentMethod: 'Bank Transfer',
-                      notes: 'Thank you for your business. Please pay within 30 days.'
+                      bankName: 'HDFC Bank',
+                      cardLast4: null,
+                      region: 'India',
+                      status: 'active',
+                      notes: 'Thank you for your business. Payment due within 30 days.'
                     });
                     setSuccess(true);
                   }}
                 >
-                  Try Demo Invoice
+                  ⚡ Try Demo Invoice
                 </Button>
               </div>
             </div>

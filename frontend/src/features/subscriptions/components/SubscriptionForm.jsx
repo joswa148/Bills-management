@@ -70,15 +70,47 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   }, [watchItems, setValue, watch]);
 
   const handleScanSuccess = (data) => {
+    // Explicitly map every OCR field to the correct form field name.
+    // Do NOT rely on spread alone — field names must match the schema exactly.
     reset({
-      ...data,
-      issueDate: data.issueDate ? dayjs(data.issueDate) : dayjs(),
-      dueDate: data.dueDate ? dayjs(data.dueDate) : null,
-      status: data.status || 'active',
+      // Service Info
+      serviceName: data.serviceName || '',
+      category: data.category || 'General',
       period: data.period || 'monthly',
       region: data.region || 'India',
-      invoiceIdNumber: data.invoiceId, // Map from scanner ID to our new schema
-      items: data.items && data.items.length > 0 ? data.items : [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }]
+      status: data.status || 'active',
+
+      // Addresses
+      senderAddress: data.senderAddress || '',
+      clientAddress: data.clientAddress || '',
+
+      // Invoice Identification — key mapping: invoiceId (OCR) → invoiceIdNumber (form)
+      invoiceIdNumber: data.invoiceId || '',
+      subject: data.subject || '',
+      poNumber: data.poNumber || '',
+
+      // Dates
+      issueDate: data.issueDate ? dayjs(data.issueDate) : dayjs(),
+      dueDate: data.dueDate ? dayjs(data.dueDate) : null,
+
+      // Financials
+      subtotal: data.subtotal || 0,
+      discount: data.discount || 0,
+      amountDue: data.amountDue || 0,
+      currency: data.currency || 'INR',
+
+      // Payment
+      paymentMethod: data.paymentMethod || '',
+      bankName: data.bankName || '',
+      cardLast4: data.cardLast4 || '',
+
+      // Line Items
+      items: (data.items && data.items.length > 0)
+        ? data.items
+        : [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }],
+
+      // Notes
+      notes: data.notes || '',
     });
   };
 
