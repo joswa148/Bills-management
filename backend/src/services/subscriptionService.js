@@ -15,7 +15,7 @@ export const processInvoice = async (userId, data) => {
       serviceName, category, period, subtotal, discount, amount_due, 
       currency, issue_date, due_date, invoice_id_number, sender_address, 
       client_address, subject, po_number, payment_method, card_last4, 
-      bank_name, notes, items, _fileHash, _meta
+      bank_name, notes, items, _fileHash, _meta, _jobId
     } = data;
 
     // 0. Check for duplicate invoice_id_number (same vendor invoice scanned twice)
@@ -63,21 +63,36 @@ export const processInvoice = async (userId, data) => {
       );
     }
 
+    // 1.5. Fetch raw scan result if jobId provided (Audit Trail)
+    let rawScanResult = null;
+    if (_jobId) {
+      const [jobs] = await connection.execute(
+        'SELECT result_data FROM scan_jobs WHERE id = ? LIMIT 1',
+        [_jobId]
+      );
+      if (jobs.length > 0) {
+        rawScanResult = jobs[0].result_data;
+      }
+    }
+
     // 2. Create Invoice
     const invoiceId = crypto.randomUUID();
     await connection.execute(
       `INSERT INTO invoices (
         id, user_id, subscription_id, invoice_id_number, sender_address, client_address, 
         subject, issue_date, due_date, po_number, subtotal, discount, amount_due, 
-        currency, payment_method, card_last4, bank_name, notes, status, file_hash, scan_confidence
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed', ?, ?)`,
+        currency, payment_method, card_last4, bank_name, notes, status, file_hash, scan_confidence,
+        scan_job_id, raw_scan_result
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed', ?, ?, ?, ?)`,
       [
         invoiceId, userId, subscriptionId, invoice_id_number, sender_address, client_address, 
         subject, issueDate, due_date ? new Date(due_date) : null, po_number, 
         subtotal, discount || 0, amount_due, currency || 'INR', 
         payment_method, card_last4, bank_name, notes,
         _fileHash || null,
-        _meta?.overallConfidence || null
+        _meta?.overallConfidence || null,
+        _jobId || null,
+        rawScanResult ? JSON.stringify(rawScanResult) : null
       ]
     );
 

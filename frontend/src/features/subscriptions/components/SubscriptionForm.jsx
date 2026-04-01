@@ -47,10 +47,12 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
   const [scanMeta, setScanMeta] = useState(null);
   const [documentUrl, setDocumentUrl] = useState(null);
   const [rawServiceName, setRawServiceName] = useState('');
+  const [scanJobId, setScanJobId] = useState(null);
 
   const handleClose = () => {
     setDocumentUrl(null);
     setRawServiceName('');
+    setScanJobId(null);
     setScanMeta(null);
     setFieldConfidence({});
     reset();
@@ -126,7 +128,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     }
   }, [watchItems]); // Only re-run when items change, NOT when discount changes
 
-  const handleScanSuccess = (data, docUrl) => {
+  const handleScanSuccess = (data, docUrl, jobId) => {
     // Set the lock flag so the useEffect does NOT overwrite amounts on this cycle
     scanJustHappened.current = true;
 
@@ -134,6 +136,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     if (data._confidence) setFieldConfidence(data._confidence);
     if (data._meta)       setScanMeta(data._meta);
     if (docUrl)           setDocumentUrl(docUrl);
+    if (jobId)            setScanJobId(jobId);
     setRawServiceName(data.rawServiceName || '');
 
     reset({
@@ -211,6 +214,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       ...data,
       issueDate: data.issueDate ? data.issueDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
       dueDate: data.dueDate && data.dueDate.isValid ? data.dueDate.format('YYYY-MM-DD') : null,
+      _jobId: scanJobId
     };
 
     try {

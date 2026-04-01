@@ -66,7 +66,7 @@ export default function BillScanner({ onScanSuccess }) {
             toast.success('Bill scanned successfully!');
             if (onScanSuccess) {
               const documentUrl = URL.createObjectURL(file);
-              onScanSuccess(res.extractedData, documentUrl);
+              onScanSuccess(res.extractedData, documentUrl, jobId);
             }
             onSuccess('OK');
           } else if (res.status === 'failed') {

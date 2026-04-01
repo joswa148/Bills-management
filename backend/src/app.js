@@ -8,6 +8,7 @@ import authRoutes from './routes/authRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import statsRoutes from './routes/statsRoutes.js';
 import { pool } from './config/database.js';
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/stats', statsRoutes);
 
 // Error Handling Middleware
 app.use((err, req, res, _next) => {
