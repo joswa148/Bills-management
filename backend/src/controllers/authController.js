@@ -31,3 +31,28 @@ export const handleLogin = async (req, res, next) => {
     next(error);
   }
 };
+
+const updateSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6).optional(),
+});
+
+export const getMe = async (req, res, next) => {
+  try {
+    const user = await authService.getUserById(req.user.id);
+    res.status(200).json({ status: 'success', data: { user } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateMe = async (req, res, next) => {
+  try {
+    const validatedData = updateSchema.parse(req.body);
+    const user = await authService.updateUser(req.user.id, validatedData);
+    res.status(200).json({ status: 'success', data: { user } });
+  } catch (error) {
+    next(error);
+  }
+};

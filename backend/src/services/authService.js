@@ -61,3 +61,27 @@ export const login = async (email, password) => {
     token,
   };
 };
+
+export const getUserById = async (id) => {
+  const [users] = await pool.execute('SELECT id, email, name, role FROM users WHERE id = ?', [id]);
+  return users[0];
+};
+
+export const updateUser = async (id, data) => {
+  const { name, email, password } = data;
+  
+  if (password) {
+    const passwordHash = await bcrypt.hash(password, 10);
+    await pool.execute(
+      'UPDATE users SET name = ?, email = ?, password_hash = ? WHERE id = ?',
+      [name, email, passwordHash, id]
+    );
+  } else {
+    await pool.execute(
+      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      [name, email, id]
+    );
+  }
+
+  return getUserById(id);
+};
