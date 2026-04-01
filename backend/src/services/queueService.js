@@ -1,4 +1,4 @@
-import pool from '../config/db.js';
+import { pool } from '../config/database.js';
 import fs from 'fs/promises';
 import crypto from 'crypto';
 import { extractSubscriptionData } from './ocrService.js';
