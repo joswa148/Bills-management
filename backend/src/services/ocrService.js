@@ -15,6 +15,7 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import * as mindee from 'mindee';
 
 // ─────────────────────────────────────────────────────────────
 // MINDEE NORMALIZER
@@ -37,7 +38,19 @@ const normalizeMindeeResponse = (prediction) => {
   const customerAddr = get(prediction.customerAddress);
 
   const clientAddressStr = [customerName.value, customerAddr.value]
-    .filter(Boolean).join('\n');
+    .filter(Boolean)
+    .map(val => val.trim().replace(/\s+/g, ' ')) // Cleanup whitespace/newlines
+    .join('\n');
+
+  const senderAddressStr = (supplierAddr.value || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  // 1.5. Advanced Extraction (Payment, Bank, Notes)
+  const paymentDetails = prediction.paymentDetails?.[0] || {};
+  const bankName = paymentDetails.name || '';
+  const notes = prediction.notes?.map(n => n.value).join('\n') || '';
+  const subject = prediction.documentType?.value || '';
 
   const items = (prediction.lineItems || []).map(item => ({
     description: item.description || '',
@@ -45,6 +58,12 @@ const normalizeMindeeResponse = (prediction) => {
     unitPrice:   Number(item.unitPrice)  || 0,
     amount:      Number(item.totalAmount) || (Number(item.quantity) * Number(item.unitPrice)) || 0,
   }));
+
+  // 1.6. Intelligent Discount Detection
+  // If Mindee doesn't yield a discount field, we sum any line items with negative amounts
+  const detectedDiscount = items
+    .filter(item => item.amount < 0)
+    .reduce((sum, item) => sum + Math.abs(item.amount), 0);
 
   const confidence = {
     invoiceIdNumber: invoiceId.confidence,
@@ -67,22 +86,22 @@ const normalizeMindeeResponse = (prediction) => {
     serviceName:   supplierName.value || 'Unknown Vendor',
     category:      'General',
     period:        'monthly',
-    senderAddress: supplierAddr.value || '',
+    senderAddress: senderAddressStr,
     clientAddress: clientAddressStr,
-    subject:       '',
+    subject:       subject,
     issueDate:     issueDate.value || new Date().toISOString().split('T')[0],
     dueDate:       dueDate.value   || null,
     poNumber:      (prediction.referenceNumbers?.[0]?.value) || null,
     subtotal:      Number(totalNet.value)    || Number(totalAmount.value) || 0,
-    discount:      0,
+    discount:      detectedDiscount || 0,
     amountDue:     Number(totalAmount.value) || 0,
     currency:      prediction.locale?.currency || 'INR',
-    paymentMethod: '',
-    bankName:      '',
+    paymentMethod: paymentDetails.method || '',
+    bankName:      bankName,
     cardLast4:     null,
     region:        'India',
     status:        'active',
-    notes:         '',
+    notes:         notes,
     items,
     _confidence: confidence,
     _meta: {
@@ -99,12 +118,14 @@ const normalizeMindeeResponse = (prediction) => {
 // Dynamic import keeps the app from crashing if mindee isn't installed
 // ─────────────────────────────────────────────────────────────
 const extractWithMindee = async (filePath) => {
-  const mindee = await import('mindee').catch(() => {
-    throw new Error('Mindee package not installed. Run: npm install mindee');
-  });
   const client      = new mindee.Client({ apiKey: process.env.MINDEE_API_KEY });
   const inputSource = client.docFromPath(filePath);
   const response    = await client.parse(mindee.product.InvoiceV4, inputSource);
+  
+  if (!response.document) {
+    throw new Error('Mindee returned an empty document response');
+  }
+
   return normalizeMindeeResponse(response.document.inference.prediction);
 };
 
@@ -215,7 +236,8 @@ const extractWithMock = async (filePath) => {
       subject:       `Invoice for ${extractedName}`,
       items:         [{ description: `${extractedName} — Monthly Plan`, quantity: 1, unitPrice: randomAmount, amount: randomAmount }],
       subtotal: randomAmount, discount: 0, amountDue: randomAmount, currency: 'INR',
-      paymentMethod: 'Credit Card', bankName: 'HDFC Bank',
+      paymentMethod: 'Credit Card', bankName: 'HDFC Bank', poNumber: randInv('PO'),
+      notes: `Standard monthly bill for ${extractedName}.`,
       // Lower confidence for generic extraction — user should review
       _confidence: { invoiceIdNumber: 0.72, serviceName: 0.65, amountDue: 0.71, subtotal: 0.71, issueDate: 0.80, dueDate: 0.75, senderAddress: 0.60, clientAddress: 0 },
     };

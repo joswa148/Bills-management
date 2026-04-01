@@ -16,11 +16,11 @@ export default function SubscriptionTable({ onEdit }) {
       render: (text, record) => (
         <div className="flex items-center space-x-3">
           <Avatar 
-            src={`https://logo.clearbit.com/${text.toLowerCase().replace(/\s+/g, '')}.com`} 
+            src={`https://logo.clearbit.com/${(text || '').toLowerCase().replace(/\s+/g, '')}.com`} 
             shape="square" 
             className="border border-secondary-100 bg-white"
           >
-            {text[0]}
+            {(text || 'S')[0]}
           </Avatar>
           <div>
             <div className="font-bold text-secondary-900">{text}</div>
@@ -69,7 +69,7 @@ export default function SubscriptionTable({ onEdit }) {
       key: 'validityDate',
       render: (date) => (
         <div className="text-secondary-600 font-medium">
-          {format(parseISO(date), 'MMM dd, yyyy')}
+          {date ? format(parseISO(date), 'MMM dd, yyyy') : 'No Date'}
         </div>
       ),
     },
@@ -79,7 +79,7 @@ export default function SubscriptionTable({ onEdit }) {
       key: 'region',
       render: (region) => (
         <Tag color={region === 'India' ? 'orange' : 'cyan'} className="rounded-md border-none px-2 font-medium">
-          {region}
+          {region || 'N/A'}
         </Tag>
       ),
     },
@@ -87,12 +87,16 @@ export default function SubscriptionTable({ onEdit }) {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => (
-        <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-2 ${status.toLowerCase() === 'active' ? 'bg-emerald-500' : 'bg-secondary-300'}`} />
-          <span className={`text-sm font-medium capitalize ${status.toLowerCase() === 'active' ? 'text-emerald-700' : 'text-secondary-500'}`}>{status}</span>
-        </div>
-      ),
+      render: (status) => {
+        const displayStatus = status || 'active';
+        const isActive = displayStatus.toLowerCase() === 'active';
+        return (
+          <div className="flex items-center">
+            <div className={`w-2 h-2 rounded-full mr-2 ${isActive ? 'bg-emerald-500' : 'bg-secondary-300'}`} />
+            <span className={`text-sm font-medium capitalize ${isActive ? 'text-emerald-700' : 'text-secondary-500'}`}>{displayStatus}</span>
+          </div>
+        );
+      },
     },
     {
       title: 'Action',
