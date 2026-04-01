@@ -4,7 +4,8 @@ import { z } from 'zod';
 const invoiceItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().default(1),
-  unitPrice: z.number(),
+  unitPrice: z.number().optional().nullable(),
+  unit_price: z.number().optional().nullable(),
   amount: z.number()
 });
 
@@ -44,7 +45,7 @@ export const addSubscription = async (req, res, next) => {
   try {
     const validatedData = billingSchema.parse(req.body);
     
-    // Map camelCase to snake_case for the service layer
+    // Normalize and Map camelCase to snake_case for the service layer
     const processData = {
       ...validatedData,
       invoice_id_number: validatedData.invoiceIdNumber,
@@ -56,7 +57,12 @@ export const addSubscription = async (req, res, next) => {
       amount_due: validatedData.amountDue,
       payment_method: validatedData.paymentMethod,
       card_last4: validatedData.cardLast4,
-      bank_name: validatedData.bankName
+      bank_name: validatedData.bankName,
+      // Ensure nested items also have a unified unitPrice for the service
+      items: (validatedData.items || []).map(item => ({
+        ...item,
+        unitPrice: item.unitPrice || item.unit_price || 0
+      }))
     };
 
     const result = await subscriptionService.processInvoice(req.user.id, processData);
@@ -87,7 +93,6 @@ export const getSubscription = async (req, res, next) => {
 
 export const editSubscription = async (req, res, next) => {
   try {
-    // Basic update logic for now
     res.status(501).json({ status: 'error', message: 'Use addSubscription to process new invoices' });
   } catch (error) {
     next(error);

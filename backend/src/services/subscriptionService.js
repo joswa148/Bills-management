@@ -159,7 +159,28 @@ export const getInvoiceDetails = async (invoiceId, userId) => {
   };
 };
 
+export const deleteSubscription = async (subscriptionId, userId) => {
+  // 1. Delete all invoices associated with this subscription 
+  // (Manual cleanup because our FK is set to ON DELETE SET NULL)
+  const [invoices] = await pool.execute(
+    'SELECT id FROM invoices WHERE subscription_id = ? AND user_id = ?',
+    [subscriptionId, userId]
+  );
+  
+  for (const inv of invoices) {
+    await deleteInvoice(inv.id, userId);
+  }
+
+  // 2. Finally delete the subscription record
+  await pool.execute(
+    'DELETE FROM subscriptions WHERE id = ? AND user_id = ?',
+    [subscriptionId, userId]
+  );
+  return true;
+};
+
 export const deleteInvoice = async (invoiceId, userId) => {
+  // Cascading deletes on invoice_items are handled by the DB (ON DELETE CASCADE)
   await pool.execute('DELETE FROM invoices WHERE id = ? AND user_id = ?', [invoiceId, userId]);
   return true;
 };
@@ -167,11 +188,16 @@ export const deleteInvoice = async (invoiceId, userId) => {
 // Compatibility shim for existing frontend code if needed
 export const getAllSubscriptions = async (userId) => {
   const [rows] = await pool.execute(
-    `SELECT s.*, i.amount_due as price_inr, i.invoice_id_number as invoice_id 
+    `SELECT s.*, i.id AS latest_invoice_id, i.amount_due AS price_inr, i.invoice_id_number AS invoice_id 
      FROM subscriptions s 
-     LEFT JOIN invoices i ON s.id = i.subscription_id 
-     WHERE s.user_id = ? 
-     AND (i.id IS NULL OR i.issue_date = (SELECT MAX(issue_date) FROM invoices WHERE subscription_id = s.id))`,
+     LEFT JOIN (
+       SELECT id, subscription_id, amount_due, invoice_id_number, issue_date 
+       FROM invoices 
+       WHERE (subscription_id, issue_date) IN (
+         SELECT subscription_id, MAX(issue_date) FROM invoices GROUP BY subscription_id
+       )
+     ) i ON s.id = i.subscription_id 
+     WHERE s.user_id = ?`,
     [userId]
   );
   return rows;

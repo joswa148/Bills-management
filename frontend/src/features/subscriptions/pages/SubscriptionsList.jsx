@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 import { CreditCard, Plus, Download, Filter } from 'lucide-react';
+import { billsApi } from '../../../lib/api/billsApi';
 import SubscriptionTable from '../components/SubscriptionTable';
 import SubscriptionForm from '../components/SubscriptionForm';
+import SubscriptionDetailModal from '../components/SubscriptionDetailModal';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import { TableSkeleton } from '../../../components/common/SkeletonLoaders';
 
 export default function SubscriptionsList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState(null);
+  const [viewingSubscription, setViewingSubscription] = useState(null);
   const { fetchSubscriptions, isLoading } = useSubscriptionStore();
 
   useEffect(() => {
@@ -22,6 +27,36 @@ export default function SubscriptionsList() {
   const handleEdit = (subscription) => {
     setEditingSubscription(subscription);
     setIsModalOpen(true);
+  };
+
+  const handleView = async (subscription) => {
+    // 1. Start with the 'lite' data from the list
+    setViewingSubscription(subscription);
+    setIsViewModalOpen(true);
+
+    // 2. If we have a link to the full bill, fetch it immediately
+    if (subscription.latest_invoice_id) {
+      try {
+        const fullData = await billsApi.getInvoice(subscription.latest_invoice_id);
+        const invoice = fullData.invoice || {};
+        
+        // 3. Senior Developer 'Strong Merge': 
+        // We merge them but ONLY overwrite if the new value is NOT empty/null.
+        setViewingSubscription(prev => {
+          const merged = { ...prev };
+          Object.keys(invoice).forEach(key => {
+            const val = invoice[key];
+            // Only update if the DB has a real value
+            if (val !== null && val !== undefined && val !== '') {
+              merged[key] = val;
+            }
+          });
+          return merged;
+        });
+      } catch (err) {
+        toast.error('Could not load detailed billing history');
+      }
+    }
   };
 
   return (
@@ -54,7 +89,7 @@ export default function SubscriptionsList() {
         {isLoading ? (
           <TableSkeleton rows={8} />
         ) : (
-          <SubscriptionTable onEdit={handleEdit} />
+          <SubscriptionTable onEdit={handleEdit} onView={handleView} />
         )}
       </div>
 
@@ -62,6 +97,12 @@ export default function SubscriptionsList() {
         open={isModalOpen} 
         onCancel={() => setIsModalOpen(false)} 
         initialValues={editingSubscription}
+      />
+
+      <SubscriptionDetailModal 
+        open={isViewModalOpen}
+        onCancel={() => setIsViewModalOpen(false)}
+        subscription={viewingSubscription}
       />
     </div>
   );

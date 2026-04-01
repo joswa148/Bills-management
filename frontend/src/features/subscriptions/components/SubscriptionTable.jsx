@@ -1,11 +1,10 @@
-import React from 'react';
 import { Table, Tag, Space, Button, Tooltip, Avatar } from 'antd';
-import { Edit2, Trash2, ExternalLink } from 'lucide-react';
+import { Edit2, Trash2, ExternalLink, Eye } from 'lucide-react';
 import { useSubscriptionStore } from '../../../store/useSubscriptionStore';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
-export default function SubscriptionTable({ onEdit }) {
+export default function SubscriptionTable({ onEdit, onView }) {
   const { subscriptions, deleteSubscription } = useSubscriptionStore();
 
   const columns = [
@@ -103,6 +102,14 @@ export default function SubscriptionTable({ onEdit }) {
       key: 'action',
       render: (_, record) => (
         <Space size="middle">
+          <Tooltip title="View Details">
+            <Button 
+              type="text" 
+              icon={<Eye size={16} className="text-secondary-400 group-hover:text-primary-600" />} 
+              onClick={() => onView(record)}
+              className="hover:bg-primary-50 rounded-lg flex items-center justify-center transition-all duration-200"
+            />
+          </Tooltip>
           <Tooltip title="Edit">
             <Button 
               type="text" 
