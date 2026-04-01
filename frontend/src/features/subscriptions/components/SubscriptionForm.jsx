@@ -47,6 +47,9 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       period: 'monthly',
       region: 'India',
       status: 'active',
+      subtotal: 0,
+      discount: 0,
+      amountDue: 0,
       items: [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }],
       currency: 'INR'
     }
@@ -57,21 +60,33 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
     name: "items"
   });
 
-  const watchItems = watch("items");
+  // Track discount reactively so the auto-calc is always accurate
+  const watchDiscount = watch('discount') || 0;
 
-  // Calculate totals when items change
+  // NOTE: This effect ONLY recalculates when the user manually edits items.
+  // It does NOT run after a scan because we use a "scanLock" flag.
+  // We use a ref to prevent overwriting values that were just set by the scanner.
+  const scanJustHappened = React.useRef(false);
+
+  const watchItems = watch('items');
+
   useEffect(() => {
+    // Skip the recalc immediately after a scan — the scan already set correct values
+    if (scanJustHappened.current) {
+      scanJustHappened.current = false;
+      return;
+    }
     if (watchItems) {
       const subtotal = watchItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
-      setValue('subtotal', subtotal);
-      const discount = watch('discount') || 0;
-      setValue('amountDue', Math.max(0, subtotal - discount));
+      setValue('subtotal', subtotal, { shouldValidate: false });
+      setValue('amountDue', Math.max(0, subtotal - watchDiscount), { shouldValidate: false });
     }
-  }, [watchItems, setValue, watch]);
+  }, [watchItems]); // Only re-run when items change, NOT when discount changes
 
   const handleScanSuccess = (data) => {
-    // Explicitly map every OCR field to the correct form field name.
-    // Do NOT rely on spread alone — field names must match the schema exactly.
+    // Set the lock flag so the useEffect does NOT overwrite amounts on this cycle
+    scanJustHappened.current = true;
+
     reset({
       // Service Info
       serviceName: data.serviceName || '',
@@ -93,20 +108,25 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
       issueDate: data.issueDate ? dayjs(data.issueDate) : dayjs(),
       dueDate: data.dueDate ? dayjs(data.dueDate) : null,
 
-      // Financials
-      subtotal: data.subtotal || 0,
-      discount: data.discount || 0,
-      amountDue: data.amountDue || 0,
+      // Financials — these are preserved by the scan lock (not overwritten by useEffect)
+      subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
+      discount: typeof data.discount === 'number' ? data.discount : 0,
+      amountDue: typeof data.amountDue === 'number' ? data.amountDue : 0,
       currency: data.currency || 'INR',
 
       // Payment
       paymentMethod: data.paymentMethod || '',
       bankName: data.bankName || '',
-      cardLast4: data.cardLast4 || '',
+      cardLast4: data.cardLast4 ? String(data.cardLast4) : '',
 
       // Line Items
       items: (data.items && data.items.length > 0)
-        ? data.items
+        ? data.items.map(item => ({
+            description: item.description || '',
+            quantity: Number(item.quantity) || 1,
+            unitPrice: Number(item.unitPrice) || 0,
+            amount: Number(item.amount) || 0,
+          }))
         : [{ description: '', quantity: 1, unitPrice: 0, amount: 0 }],
 
       // Notes
@@ -320,7 +340,19 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                         <Controller
                           name={`items.${index}.quantity`}
                           control={control}
-                          render={({ field }) => <InputNumber {...field} bordered={false} className="w-full text-xs" />}
+                          render={({ field }) => (
+                            <InputNumber
+                              {...field}
+                              bordered={false}
+                              className="w-full text-xs"
+                              min={1}
+                              onChange={(val) => {
+                                field.onChange(val);
+                                const price = watch(`items.${index}.unitPrice`) || 0;
+                                setValue(`items.${index}.amount`, (val || 0) * price, { shouldValidate: false });
+                              }}
+                            />
+                          )}
                         />
                       </td>
                       <td className="px-2 py-2">
@@ -335,7 +367,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                               onChange={(val) => {
                                 field.onChange(val);
                                 const qty = watch(`items.${index}.quantity`) || 1;
-                                setValue(`items.${index}.amount`, (val || 0) * qty);
+                                setValue(`items.${index}.amount`, (val || 0) * qty, { shouldValidate: false });
                               }}
                             />
                           )}
