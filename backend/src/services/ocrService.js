@@ -1,9 +1,9 @@
 /**
- * OCR Service — Production-Ready, Mindee-First Architecture
+ * OCR Service — Production-Ready, Gemini-First Architecture
  *
  * Strategy:
- *   • If MINDEE_API_KEY env var is set → calls real Mindee InvoiceV4 parser
- *   • If not set              → enhanced mock that returns the SAME data shape
+ *   • If GEMINI_API_KEY env var is set → calls Google Gemini AI (1.5 Flash)
+ *   • If not set                → enhanced mock that returns the SAME data shape
  *
  * Response contract (always consistent, both paths):
  * {
@@ -15,123 +15,110 @@
 
 import path from 'path';
 import fs from 'fs/promises';
-import * as mindee from 'mindee';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ─────────────────────────────────────────────────────────────
-// MINDEE NORMALIZER
-// Maps Mindee InvoiceV4 prediction → our flat schema
+// GEMINI PROVIDER
+// Uses multimodal capabilities to extract structured data
 // ─────────────────────────────────────────────────────────────
-const normalizeMindeeResponse = (prediction) => {
-  const get = (field) => ({
-    value: field?.value ?? null,
-    confidence: typeof field?.confidence === 'number' ? field.confidence : 0
+const extractWithGemini = async (filePath) => {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: { responseMimeType: "application/json" }
   });
 
-  const invoiceId   = get(prediction.invoiceNumber);
-  const supplierName = get(prediction.supplierName);
-  const totalAmount  = get(prediction.totalAmount);
-  const totalNet     = get(prediction.totalNet);
-  const issueDate    = get(prediction.date);
-  const dueDate      = get(prediction.dueDate);
-  const supplierAddr = get(prediction.supplierAddress);
-  const customerName = get(prediction.customerName);
-  const customerAddr = get(prediction.customerAddress);
-
-  const clientAddressStr = [customerName.value, customerAddr.value]
-    .filter(Boolean)
-    .map(val => val.trim().replace(/\s+/g, ' ')) // Cleanup whitespace/newlines
-    .join('\n');
-
-  const senderAddressStr = (supplierAddr.value || '')
-    .trim()
-    .replace(/\s+/g, ' ');
-
-  // 1.5. Advanced Extraction (Payment, Bank, Notes)
-  const paymentDetails = prediction.paymentDetails?.[0] || {};
-  const bankName = paymentDetails.name || '';
-  const notes = prediction.notes?.map(n => n.value).join('\n') || '';
-  const subject = prediction.documentType?.value || '';
-
-  const items = (prediction.lineItems || []).map(item => ({
-    description: item.description || '',
-    quantity:    Number(item.quantity)   || 1,
-    unitPrice:   Number(item.unitPrice)  || 0,
-    amount:      Number(item.totalAmount) || (Number(item.quantity) * Number(item.unitPrice)) || 0,
-  }));
-
-  // 1.6. Intelligent Discount Detection
-  // If Mindee doesn't yield a discount field, we sum any line items with negative amounts
-  const detectedDiscount = items
-    .filter(item => item.amount < 0)
-    .reduce((sum, item) => sum + Math.abs(item.amount), 0);
-
-  const confidence = {
-    invoiceIdNumber: invoiceId.confidence,
-    serviceName:     supplierName.confidence,
-    amountDue:       totalAmount.confidence,
-    subtotal:        totalNet.confidence,
-    issueDate:       issueDate.confidence,
-    dueDate:         dueDate.confidence,
-    senderAddress:   supplierAddr.confidence,
-    clientAddress:   Math.max(customerName.confidence, customerAddr.confidence),
+  const fileBuffer = await fs.readFile(filePath);
+  const fileExt = path.extname(filePath).toLowerCase();
+  const mimeTypeMap = {
+    '.pdf': 'application/pdf',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp'
   };
+  const mimeType = mimeTypeMap[fileExt] || 'image/jpeg';
 
-  const confValues = Object.values(confidence).filter(v => v > 0);
-  const overallConfidence = confValues.length > 0
-    ? Math.round((confValues.reduce((s, v) => s + v, 0) / confValues.length) * 100) / 100
-    : 0;
+  const prompt = `
+    Act as an expert invoice processor. Analyze the provided document and extract all data into the following strict JSON format:
+    {
+      "invoiceId": "string (invoice number)",
+      "serviceName": "string (vendor/supplier name)",
+      "category": "string (one of: Entertainment, Infrastructure, Productivity, Software, Utilities, Other)",
+      "period": "string (monthly, yearly, quarterly)",
+      "senderAddress": "string (The FULL multiline address of the vendor/selling company. Look at the very top or bottom of the page.)",
+      "clientAddress": "string (The FULL multiline address of the customer/recipient. Look for 'Bill To', 'Attention:', or 'Ship To')",
+      "subject": "string (brief description of the bill)",
+      "issueDate": "YYYY-MM-DD",
+      "dueDate": "YYYY-MM-DD",
+      "poNumber": "string (Purchase order number if any)",
+      "subtotal": number,
+      "discount": number,
+      "amountDue": number,
+      "currency": "string (3-letter code, e.g. INR, USD)",
+      "paymentMethod": "string",
+      "bankName": "string",
+      "cardLast4": "string (null if not found)",
+      "notes": "string",
+      "items": [
+        { "description": "string", "quantity": number, "unitPrice": number, "amount": number }
+      ]
+    }
+    Critical Requirements for Addresses:
+    - You MUST extract the full physical address (Street, City, State, Pin, Country).
+    - If you see a company name followed by lines that look like an address, capture all those lines into the address field.
+    - Use "\\n" for newlines between address parts.
+    - If the address is split across multiple areas, combine them into a single coherent multiline string.
+    - If a field is truly missing, use null.
+    - Return ONLY the JSON object.
+  `;
 
-  return {
-    invoiceId:     invoiceId.value,
-    serviceName:   supplierName.value || 'Unknown Vendor',
-    category:      'General',
-    period:        'monthly',
-    senderAddress: senderAddressStr,
-    clientAddress: clientAddressStr,
-    subject:       subject,
-    issueDate:     issueDate.value || new Date().toISOString().split('T')[0],
-    dueDate:       dueDate.value   || null,
-    poNumber:      (prediction.referenceNumbers?.[0]?.value) || null,
-    subtotal:      Number(totalNet.value)    || Number(totalAmount.value) || 0,
-    discount:      detectedDiscount || 0,
-    amountDue:     Number(totalAmount.value) || 0,
-    currency:      prediction.locale?.currency || 'INR',
-    paymentMethod: paymentDetails.method || '',
-    bankName:      bankName,
-    cardLast4:     null,
-    region:        'India',
-    status:        'active',
-    notes:         notes,
-    items,
-    _confidence: confidence,
-    _meta: {
-      overallConfidence,
-      provider:        'mindee',
-      fieldsExtracted: Object.keys(confidence).length,
-      processedAt:     new Date().toISOString(),
-    },
-  };
-};
+  try {
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: fileBuffer.toString("base64"),
+          mimeType: mimeType,
+        },
+      },
+    ]);
 
-// ─────────────────────────────────────────────────────────────
-// MINDEE PROVIDER
-// Dynamic import keeps the app from crashing if mindee isn't installed
-// ─────────────────────────────────────────────────────────────
-const extractWithMindee = async (filePath) => {
-  const client      = new mindee.Client({ apiKey: process.env.MINDEE_API_KEY });
-  const inputSource = client.docFromPath(filePath);
-  const response    = await client.parse(mindee.product.InvoiceV4, inputSource);
-  
-  if (!response.document) {
-    throw new Error('Mindee returned an empty document response');
+    const response = await result.response;
+    const text = response.text();
+    const data = JSON.parse(text);
+
+    // Add confidence scores (Gemini doesn't provide them per field, so we use a high baseline)
+    const confidence = {
+      invoiceIdNumber: 0.95,
+      serviceName: 0.98,
+      amountDue: 0.99,
+      subtotal: 0.98,
+      issueDate: 0.95,
+      dueDate: 0.90,
+      senderAddress: 0.85,
+      clientAddress: 0.85,
+    };
+
+    return {
+      ...data,
+      _confidence: confidence,
+      _meta: {
+        overallConfidence: 0.95,
+        provider: 'gemini',
+        fieldsExtracted: Object.keys(data).length,
+        processedAt: new Date().toISOString(),
+      },
+    };
+  } catch (err) {
+    console.error('[OCR] Gemini processing error:', err);
+    throw new Error(`Gemini OCR failed: ${err.message}`);
   }
-
-  return normalizeMindeeResponse(response.document.inference.prediction);
 };
 
 // ─────────────────────────────────────────────────────────────
 // MOCK PROVIDER
-// Returns identical shape to Mindee path, including _confidence + _meta
+// Returns identical shape to Gemini path, including _confidence + _meta
 // ─────────────────────────────────────────────────────────────
 const extractWithMock = async (filePath) => {
   const fileName = path.basename(filePath).toLowerCase();
@@ -278,12 +265,12 @@ const extractWithMock = async (filePath) => {
 // MAIN EXPORT — Provider selection with automatic fallback
 // ─────────────────────────────────────────────────────────────
 export const extractSubscriptionData = async (filePath) => {
-  if (process.env.MINDEE_API_KEY && process.env.MINDEE_API_KEY !== 'your_mindee_api_key') {
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'AIzaSy...') {
     try {
-      console.log('[OCR] Using Mindee API for extraction...');
-      return await extractWithMindee(filePath);
+      console.log('[OCR] Using Gemini AI for extraction...');
+      return await extractWithGemini(filePath);
     } catch (err) {
-      console.warn('[OCR] Mindee failed, falling back to mock:', err.message);
+      console.warn('[OCR] Gemini failed, falling back to mock:', err.message);
     }
   }
   console.log('[OCR] Using enhanced mock provider...');
