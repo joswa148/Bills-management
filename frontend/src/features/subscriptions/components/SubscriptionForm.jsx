@@ -436,7 +436,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                         <Controller
                           name={`items.${index}.description`}
                           control={control}
-                          render={({ field }) => <Input {...field} placeholder="Item description" bordered={false} className="text-xs" />}
+                          render={({ field }) => <Input {...field} placeholder="Item description" variant="borderless" className="text-xs" />}
                         />
                       </td>
                       <td className="px-2 py-2">
@@ -446,7 +446,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                           render={({ field }) => (
                             <InputNumber
                               {...field}
-                              bordered={false}
+                              variant="borderless"
                               className="w-full text-xs"
                               min={1}
                               onChange={(val) => {
@@ -465,7 +465,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                           render={({ field }) => (
                             <InputNumber 
                               {...field} 
-                              bordered={false} 
+                              variant="borderless" 
                               className="w-full text-xs" 
                               onChange={(val) => {
                                 field.onChange(val);
@@ -480,7 +480,7 @@ export default function SubscriptionForm({ open, onCancel, initialValues }) {
                         <Controller
                           name={`items.${index}.amount`}
                           control={control}
-                          render={({ field }) => <InputNumber {...field} bordered={false} readOnly className="w-full text-xs font-bold" />}
+                          render={({ field }) => <InputNumber {...field} variant="borderless" readOnly className="w-full text-xs font-bold" />}
                         />
                       </td>
                       <td className="px-2 py-2 text-center">
