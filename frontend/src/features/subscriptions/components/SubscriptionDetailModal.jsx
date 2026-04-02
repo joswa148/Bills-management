@@ -84,7 +84,7 @@ export default function SubscriptionDetailModal({ open, onCancel, subscription }
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <Avatar 
-                src={`https://logo.clearbit.com/${(serviceName || '').toLowerCase().replace(/\s+/g, '')}.com`} 
+                src={serviceName && serviceName.trim() ? `https://logo.clearbit.com/${serviceName.toLowerCase().replace(/\s+/g, '')}.com` : null} 
                 size={64}
                 shape="square" 
                 className="border border-secondary-100 bg-white shadow-sm"

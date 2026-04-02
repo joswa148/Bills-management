@@ -15,7 +15,7 @@ export default function SubscriptionTable({ onEdit, onView }) {
       render: (text, record) => (
         <div className="flex items-center space-x-3">
           <Avatar 
-            src={`https://logo.clearbit.com/${(text || '').toLowerCase().replace(/\s+/g, '')}.com`} 
+            src={text && text.trim() ? `https://logo.clearbit.com/${text.toLowerCase().replace(/\s+/g, '')}.com` : null} 
             shape="square" 
             className="border border-secondary-100 bg-white"
           >
